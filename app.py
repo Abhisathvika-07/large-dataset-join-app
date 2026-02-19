@@ -18,17 +18,33 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* ===== FULL BACKGROUND ===== */
-.stApp {
-    background: linear-gradient(
-        rgba(5, 20, 40, 0.92),
-        rgba(5, 20, 40, 0.92)
-    ),
-    url("https://images.unsplash.com/photo-1492724441997-5dc865305da7");
+/* ===== FULL BACKGROUND IMAGE ===== */
+[data-testid="stAppViewContainer"] {
+    background-image: 
+        linear-gradient(rgba(10,25,47,0.55), rgba(10,25,47,0.55)),
+        url("https://images.pexels.com/photos/1181467/pexels-photo-1181467.jpeg");
     background-size: cover;
     background-position: center;
+    background-repeat: no-repeat;
     background-attachment: fixed;
 }
+
+/* Remove white header space */
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+/* Make content transparent */
+[data-testid="stVerticalBlock"] > div {
+    background-color: rgba(0,0,0,0.3);
+    padding: 20px;
+    border-radius: 15px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
 
 /* ===== LOGIN CARD ===== */
 .login-box {
@@ -240,3 +256,4 @@ if file1 and file2:
 
 else:
     st.info("Upload both CSV files to begin.")
+
