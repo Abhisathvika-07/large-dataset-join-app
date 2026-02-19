@@ -1,117 +1,179 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
-st.set_page_config(layout="wide")
+# -------------------------------------------------------
+# PAGE CONFIG
+# -------------------------------------------------------
+st.set_page_config(page_title="Enterprise Data Join Platform", layout="wide")
 
-# -----------------------------
-# REMOVE STREAMLIT HEADER
-# -----------------------------
-hide_streamlit_style = """
-<style>
-#MainMenu {visibility: hidden;}
-header {visibility: hidden;}
-footer {visibility: hidden;}
-.stDeployButton {display:none;}
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# -------------------------------------------------------
+# SESSION STATE FOR LOGIN
+# -------------------------------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-# -----------------------------
-# LOGIN STATE
-# -----------------------------
-if "auth" not in st.session_state:
-    st.session_state.auth = False
+if "users" not in st.session_state:
+    st.session_state.users = {"admin": "1234"}
 
-
-# =============================
-# LOGIN PAGE
-# =============================
-def login_page():
-
+# -------------------------------------------------------
+# LOGIN PAGE STYLING
+# -------------------------------------------------------
+def login_background():
     st.markdown("""
     <style>
     .stApp {
-        background: url("https://images.unsplash.com/photo-1522071820081-009f0129c71c")
-        no-repeat center center fixed;
+        background-image: 
+        linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)),
+        url("https://images.unsplash.com/photo-1492724441997-5dc865305da7");
         background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
     }
 
-    .login-box {
-        background: rgba(0, 0, 0, 0.75);
-        padding: 40px;
-        border-radius: 15px;
-        width: 400px;
-        margin: auto;
-        margin-top: 150px;
+    header, #MainMenu, footer {
+        visibility: hidden;
+    }
+
+    h1, h2, h3, label {
+        color: white !important;
+    }
+
+    .stTextInput > div > div > input {
+        background-color: #111827 !important;
+        color: white !important;
+    }
+
+    .stButton button {
+        background-color: #2563eb;
         color: white;
-        text-align: center;
-        box-shadow: 0px 10px 40px rgba(0,0,0,0.5);
+        border-radius: 8px;
+        padding: 10px 20px;
+    }
+
+    .stButton button:hover {
+        background-color: #1e40af;
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="login-box">', unsafe_allow_html=True)
-    st.markdown("## 🔐 Enterprise Secure Login")
-
-    user = st.text_input("Username")
-    pwd = st.text_input("Password", type="password")
-
-    if st.button("Login"):
-        if user == "admin" and pwd == "admin123":
-            st.session_state.auth = True
-            st.rerun()
-        else:
-            st.error("Invalid Credentials")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-# =============================
-# DASHBOARD PAGE
-# =============================
-def dashboard():
-
+# -------------------------------------------------------
+# MAIN PAGE STYLING
+# -------------------------------------------------------
+def main_background():
     st.markdown("""
     <style>
     .stApp {
-        background: url("https://images.unsplash.com/photo-1492724441997-5dc865305da7")
-        no-repeat center center fixed;
+        background-image: 
+        linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)),
+        url("https://images.unsplash.com/photo-1551288049-bebda4e38f71");
         background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
     }
 
-    .main-container {
-        background: rgba(255,255,255,0.92);
-        padding: 30px;
-        border-radius: 15px;
-        margin-top: 40px;
-        box-shadow: 0px 10px 40px rgba(0,0,0,0.3);
+    header, #MainMenu, footer {
+        visibility: hidden;
+    }
+
+    h1, h2, h3, label {
+        color: white !important;
+    }
+
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div {
+        background-color: #111827 !important;
+        color: white !important;
+    }
+
+    .stButton button {
+        background-color: #10b981;
+        color: white;
+        border-radius: 8px;
+        padding: 8px 16px;
+    }
+
+    .stButton button:hover {
+        background-color: #059669;
+    }
+
+    section[data-testid="stSidebar"] {
+        background-color: #0f172a !important;
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
+# -------------------------------------------------------
+# LOGIN / REGISTER PAGE
+# -------------------------------------------------------
+if not st.session_state.logged_in:
+
+    login_background()
+
+    st.markdown("## 🔐 Secure Enterprise Login")
+
+    option = st.radio("Select Option", ["Login", "Create Account"])
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if option == "Login":
+        if st.button("Login"):
+            if username in st.session_state.users and \
+               st.session_state.users[username] == password:
+                st.session_state.logged_in = True
+                st.success("Login Successful!")
+                st.rerun()
+            else:
+                st.error("Invalid Credentials")
+
+    else:
+        if st.button("Create Account"):
+            if username in st.session_state.users:
+                st.warning("User already exists")
+            else:
+                st.session_state.users[username] = password
+                st.success("Account Created! Please login.")
+
+# -------------------------------------------------------
+# MAIN APPLICATION
+# -------------------------------------------------------
+else:
+
+    main_background()
 
     st.title("📊 Enterprise Multi-Dataset Join Platform")
 
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+    # Dataset Domains
     dataset_type = st.selectbox(
         "Select Dataset Domain",
         [
-            "Education","E-Commerce","Healthcare",
-            "Employee Management","Finance",
-            "Retail","Banking","Telecom",
-            "Insurance","Manufacturing"
+            "Education",
+            "E-Commerce",
+            "Healthcare",
+            "Employee Management",
+            "Banking",
+            "Retail",
+            "Telecommunications",
+            "Logistics",
+            "Manufacturing",
+            "Insurance"
         ]
     )
 
+    # Join Type
     join_type = st.selectbox(
         "Select Join Type",
-        ["inner","left","right","outer"]
+        ["inner", "left", "right", "outer"]
     )
 
     st.sidebar.header("Upload CSV Files")
+
     file1 = st.sidebar.file_uploader("Upload First Dataset", type=["csv"])
     file2 = st.sidebar.file_uploader("Upload Second Dataset", type=["csv"])
 
@@ -120,51 +182,71 @@ def dashboard():
         "E-Commerce": "customer_id",
         "Healthcare": "patient_id",
         "Employee Management": "employee_id",
-        "Finance": "account_id",
+        "Banking": "account_id",
         "Retail": "product_id",
-        "Banking": "customer_id",
-        "Telecom": "subscriber_id",
-        "Insurance": "policy_id",
-        "Manufacturing": "machine_id"
+        "Telecommunications": "subscriber_id",
+        "Logistics": "shipment_id",
+        "Manufacturing": "machine_id",
+        "Insurance": "policy_id"
     }
 
     if file1 and file2:
-        df1 = pd.read_csv(file1)
-        df2 = pd.read_csv(file2)
 
-        join_column = join_keys[dataset_type]
+        with st.spinner("Processing datasets..."):
 
-        if join_column in df1.columns and join_column in df2.columns:
-            final = pd.merge(df1, df2, on=join_column, how=join_type)
+            df1 = pd.read_csv(file1)
+            df2 = pd.read_csv(file2)
 
-            st.success(f"Joined using {join_type.upper()} on {join_column}")
+            df1.columns = df1.columns.str.strip()
+            df2.columns = df2.columns.str.strip()
 
-            col1, col2 = st.columns(2)
-            col1.metric("Total Rows", len(final))
-            col2.metric("Total Columns", len(final.columns))
+            join_column = join_keys[dataset_type]
 
-            st.dataframe(final.head(50), use_container_width=True)
+            if join_column in df1.columns and join_column in df2.columns:
 
-            csv = final.to_csv(index=False).encode()
-            st.download_button("Download CSV", csv, "merged.csv")
+                final = pd.merge(df1, df2, on=join_column, how=join_type)
 
-            numeric_cols = final.select_dtypes(include=["int64","float64"]).columns
-            if len(numeric_cols) > 0:
-                selected = st.selectbox("Select Numeric Column", numeric_cols)
-                fig = px.bar(final[selected].value_counts().head(10))
-                st.plotly_chart(fig, use_container_width=True)
+                st.success(
+                    f"Joined using {join_type.upper()} join on '{join_column}'"
+                )
 
-        else:
-            st.error(f"Column {join_column} not found")
+                col1, col2 = st.columns(2)
+                col1.metric("Total Rows", len(final))
+                col2.metric("Total Columns", len(final.columns))
 
-    st.markdown('</div>', unsafe_allow_html=True)
+                st.subheader("Preview (First 100 Rows)")
+                st.dataframe(final.head(100), use_container_width=True)
 
+                csv = final.to_csv(index=False).encode("utf-8")
 
-# =============================
-# ROUTING
-# =============================
-if not st.session_state.auth:
-    login_page()
-else:
-    dashboard()
+                st.download_button(
+                    "⬇ Download Merged Dataset",
+                    data=csv,
+                    file_name="merged_dataset.csv",
+                    mime="text/csv"
+                )
+
+                # Visualization
+                numeric_cols = final.select_dtypes(
+                    include=["int64", "float64"]
+                ).columns
+
+                if len(numeric_cols) > 0:
+                    selected_col = st.selectbox(
+                        "Select Column for Visualization",
+                        numeric_cols
+                    )
+
+                    st.bar_chart(final[selected_col].value_counts().head(10))
+                    st.line_chart(final[selected_col].head(50))
+                else:
+                    st.info("No numeric columns available.")
+
+            else:
+                st.error(
+                    f"Required column '{join_column}' not found in both files."
+                )
+
+    else:
+        st.info("Please upload both CSV files to begin.")
 
