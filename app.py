@@ -1,197 +1,224 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.cluster import KMeans
+import io
 
-st.set_page_config("Multi Dataset Fusion Platform", layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
 
-# ==========================
-# SESSION STATE INIT
-# ==========================
-if "users" not in st.session_state:
-    st.session_state.users = {"admin": "1234"}
+# ---------------- DARK PROFESSIONAL THEME ----------------
+st.markdown("""
+<style>
+.stApp {
+    background-color: #0b1f3a;
+    color: white;
+}
+section[data-testid="stSidebar"] {
+    background-color: #071426;
+}
+h1, h2, h3, h4 {
+    color: #ffffff;
+}
+.stButton>button {
+    background-color: #1f3c88;
+    color: white;
+    border-radius: 6px;
+}
+.stSelectbox div[data-baseweb="select"] {
+    background-color: #1b2c4a;
+}
+</style>
+""", unsafe_allow_html=True)
 
+# ---------------- LOGIN SYSTEM ----------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+if "users" not in st.session_state:
+    st.session_state.users = {"admin": "admin123"}
 
-# ==========================
-# STYLING
-# ==========================
-def login_style():
-    st.markdown("""
-    <style>
-    .stApp {
-        background: linear-gradient(135deg,#1f2937,#111827);
-    }
-    h1,label {color:white !important;}
-    .block-container {
-        background: rgba(255,255,255,0.05);
-        padding:2rem;
-        border-radius:15px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-def main_style():
-    st.markdown("""
-    <style>
-    .stApp {background-color:#f4f6f9;}
-    h1,h2,h3,label {color:#1e293b !important;}
-    .block-container {
-        background:white;
-        padding:2rem;
-        border-radius:15px;
-        box-shadow:0 6px 18px rgba(0,0,0,0.08);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# ==========================
-# LOGIN PAGE
-# ==========================
-if not st.session_state.logged_in:
-
-    login_style()
-    st.title("🔐 Data Fusion Platform Login")
-
-    mode = st.radio("Select Option", ["Login","Create Account","Forgot Password"])
-
+def login_page():
+    st.title("🔐 Secure Login")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
-    if mode == "Login":
-        if st.button("Login"):
-            if username in st.session_state.users and \
-               st.session_state.users[username] == password:
-                st.session_state.logged_in = True
-                st.rerun()
-            else:
-                st.error("Invalid Credentials")
+    col1, col2 = st.columns(2)
 
-    elif mode == "Create Account":
-        if st.button("Create Account"):
-            if username in st.session_state.users:
-                st.warning("User already exists")
-            else:
-                st.session_state.users[username] = password
-                st.success("Account created successfully")
+    if col1.button("Login"):
+        if username in st.session_state.users and st.session_state.users[username] == password:
+            st.session_state.logged_in = True
+            st.success("Login successful")
+            st.rerun()
+        else:
+            st.error("Invalid credentials")
 
-    elif mode == "Forgot Password":
-        if st.button("Recover Password"):
-            if username in st.session_state.users:
-                st.success(f"Your password: {st.session_state.users[username]}")
-            else:
-                st.error("User not found")
+    if col2.button("Create Account"):
+        st.session_state.show_create = True
 
-# ==========================
-# MAIN DASHBOARD
-# ==========================
-else:
+    if st.button("Forgot Password"):
+        st.info("Contact Admin to reset password")
 
-    main_style()
+def create_account():
+    st.title("🆕 Create Account")
+    new_user = st.text_input("New Username")
+    new_pass = st.text_input("New Password", type="password")
 
-    # ---- SIDEBAR ----
-    st.sidebar.title("📂 Upload Datasets")
-
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
+    if st.button("Register"):
+        st.session_state.users[new_user] = new_pass
+        st.success("Account Created! Please Login.")
+        st.session_state.show_create = False
         st.rerun()
 
-    uploaded_files = st.sidebar.file_uploader(
-        "Upload CSV / Excel / JSON",
-        type=["csv","xlsx","json"],
-        accept_multiple_files=True
-    )
-
-    st.title("📊 Multi-Dataset Fusion Dashboard")
-
-    if uploaded_files and len(uploaded_files) >= 2:
-
-        dfs = []
-
-        for file in uploaded_files:
-            if file.name.endswith(".csv"):
-                df = pd.read_csv(file)
-            elif file.name.endswith(".xlsx"):
-                df = pd.read_excel(file)
-            else:
-                df = pd.read_json(file)
-
-            dfs.append(df)
-
-        # ---- AUTO DETECT JOIN KEYS ----
-        common_cols = set(dfs[0].columns)
-        for df in dfs[1:]:
-            common_cols &= set(df.columns)
-
-        if not common_cols:
-            st.error("No common columns found between files.")
-            st.stop()
-
-        join_col = st.selectbox("Select Join Column", list(common_cols))
-        join_type = st.selectbox("Join Type", ["inner","left","right","outer"])
-
-        # ---- MERGE ----
-        final = dfs[0]
-        for df in dfs[1:]:
-            final = pd.merge(final, df, on=join_col, how=join_type)
-
-        st.success("Datasets merged successfully!")
-
-        # ---- KPI SECTION ----
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Rows", len(final))
-        c2.metric("Columns", len(final.columns))
-        c3.metric("Missing Values", final.isnull().sum().sum())
-
-        # ---- DATA CLEANING OPTIONS ----
-        st.subheader("🛠 Data Cleaning Options")
-
-        if st.checkbox("Remove Duplicates"):
-            final = final.drop_duplicates()
-
-        if st.checkbox("Drop Null Rows"):
-            final = final.dropna()
-
-        if st.checkbox("Fill Missing Values"):
-            final = final.fillna(0)
-
-        # ---- CHARTS ----
-        st.subheader("📈 Visual Insights")
-
-        numeric_cols = final.select_dtypes(include=np.number).columns
-
-        if len(numeric_cols) > 0:
-
-            selected_col = st.selectbox("Select Numeric Column", numeric_cols)
-
-            col1, col2 = st.columns(2)
-
-            # Bar Chart
-            col1.bar_chart(final[selected_col].value_counts().head(10))
-
-            # Pie Chart
-            fig, ax = plt.subplots()
-            final[selected_col].value_counts().head(5).plot.pie(autopct="%1.1f%%")
-            col2.pyplot(fig)
-
-            # Correlation Heatmap
-            st.subheader("Correlation Heatmap")
-            fig2, ax2 = plt.subplots()
-            sns.heatmap(final[numeric_cols].corr(), annot=True, cmap="coolwarm")
-            st.pyplot(fig2)
-
-        # ---- DATA PREVIEW ----
-        st.subheader("📋 Final Dataset Preview")
-        st.dataframe(final.head(100))
-
-        # ---- EXPORT ----
-        st.subheader("⬇ Export Data")
-
-        csv = final.to_csv(index=False).encode("utf-8")
-        st.download_button("Download CSV", csv, "final_data.csv")
-
+if not st.session_state.logged_in:
+    if "show_create" in st.session_state and st.session_state.show_create:
+        create_account()
     else:
-        st.info("Upload at least 2 files to begin.")
+        login_page()
+    st.stop()
+
+# ---------------- MAIN APP ----------------
+st.title("📊 Multi-Dataset Fusion Dashboard")
+
+if st.button("Logout"):
+    st.session_state.logged_in = False
+    st.rerun()
+
+# ---------------- DOMAINS ----------------
+domains = [
+    "Education Analytics",
+    "Healthcare Management",
+    "E-Commerce & Retail",
+    "Banking & Finance",
+    "HR Management",
+    "Supply Chain",
+    "Telecommunications",
+    "Real Estate",
+    "Social Media Analytics",
+    "Manufacturing"
+]
+
+domain = st.selectbox("📂 Select Business Domain", domains)
+
+# ---------------- SIDEBAR UPLOAD ----------------
+st.sidebar.title("📁 Upload Datasets")
+uploaded_files = st.sidebar.file_uploader(
+    "Upload Files (CSV, Excel, JSON)",
+    type=["csv", "xlsx", "json"],
+    accept_multiple_files=True
+)
+
+# ---------------- FILE READING ----------------
+@st.cache_data
+def load_file(file):
+    if file.name.endswith(".csv"):
+        return pd.read_csv(file)
+    elif file.name.endswith(".xlsx"):
+        return pd.read_excel(file)
+    elif file.name.endswith(".json"):
+        return pd.read_json(file)
+
+if uploaded_files and len(uploaded_files) >= 2:
+
+    df_list = [load_file(f) for f in uploaded_files]
+
+    # ---------------- AUTO DETECT COMMON COLUMNS ----------------
+    common_cols = set(df_list[0].columns)
+    for df in df_list[1:]:
+        common_cols = common_cols.intersection(set(df.columns))
+
+    if len(common_cols) == 0:
+        st.error("❌ No common join columns detected.")
+        st.stop()
+
+    join_column = st.selectbox("🔍 Auto Detected Join Columns", list(common_cols))
+    join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
+
+    # ---------------- MERGE ----------------
+    final = df_list[0]
+    for df in df_list[1:]:
+        final = final.merge(df, on=join_column, how=join_type)
+
+    st.success("Datasets merged successfully!")
+
+    # ---------------- DATA CLEANING ----------------
+    st.subheader("🧹 Data Cleaning Options")
+    remove_dup = st.checkbox("Remove Duplicates")
+    drop_null = st.checkbox("Drop Null Rows")
+    normalize = st.checkbox("Normalize Numeric Columns")
+
+    if remove_dup:
+        final = final.drop_duplicates()
+    if drop_null:
+        final = final.dropna()
+    if normalize:
+        scaler = MinMaxScaler()
+        num_cols = final.select_dtypes(include=np.number).columns
+        final[num_cols] = scaler.fit_transform(final[num_cols])
+
+    # ---------------- KPI CARDS ----------------
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Rows", final.shape[0])
+    col2.metric("Columns", final.shape[1])
+    col3.metric("Missing Values", final.isnull().sum().sum())
+
+    # ---------------- CHARTS ----------------
+    st.subheader("📈 Visual Analytics")
+
+    numeric_cols = final.select_dtypes(include=np.number).columns
+
+    if len(numeric_cols) > 0:
+        selected_col = st.selectbox("Select Numeric Column", numeric_cols)
+
+        col1, col2 = st.columns(2)
+
+        fig_bar = px.bar(final[selected_col].value_counts().head(10))
+        col1.plotly_chart(fig_bar, use_container_width=True)
+
+        fig_pie = px.pie(final, names=selected_col)
+        col2.plotly_chart(fig_pie, use_container_width=True)
+
+        fig_line = px.line(final[selected_col])
+        st.plotly_chart(fig_line, use_container_width=True)
+
+        # Correlation Heatmap
+        corr = final[numeric_cols].corr()
+        fig_heat = px.imshow(corr, text_auto=True)
+        st.plotly_chart(fig_heat, use_container_width=True)
+
+    # ---------------- ML OPTION ----------------
+    st.subheader("🤖 ML Option")
+
+    if len(numeric_cols) >= 2:
+        target = st.selectbox("Select Target Column", numeric_cols)
+        features = final[numeric_cols].drop(columns=[target])
+
+        if st.button("Run Regression"):
+            model = LinearRegression()
+            model.fit(features, final[target])
+            st.success("Regression Model Trained Successfully")
+
+        if st.button("Run Clustering"):
+            kmeans = KMeans(n_clusters=3)
+            final["Cluster"] = kmeans.fit_predict(features)
+            st.success("Clustering Complete")
+            st.dataframe(final.head())
+
+    # ---------------- EXPORT ----------------
+    st.subheader("⬇ Export Data")
+
+    csv = final.to_csv(index=False).encode()
+    st.download_button("Download CSV", csv, "final_dataset.csv")
+
+    buffer = io.BytesIO()
+    final.to_excel(buffer, index=False)
+    st.download_button("Download Excel", buffer, "final_dataset.xlsx")
+
+    json_data = final.to_json().encode()
+    st.download_button("Download JSON", json_data, "final_dataset.json")
+
+else:
+    st.info("Upload at least 2 files to begin.")
 
