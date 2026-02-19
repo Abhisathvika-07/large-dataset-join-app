@@ -30,29 +30,32 @@ def login_background():
         bottom: 0;
         min-width: 100%;
         min-height: 100%;
-        z-index: -1;
         object-fit: cover;
+        z-index: -2;
     }
 
+    /* LIGHTER OVERLAY */
     .overlay {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.75);
+        background: rgba(0, 0, 0, 0.45);
         z-index: -1;
     }
 
     .login-box {
-        background: rgba(17, 24, 39, 0.9);
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(15px);
         padding: 50px;
-        border-radius: 15px;
+        border-radius: 20px;
         width: 420px;
         margin: auto;
         margin-top: 120px;
-        box-shadow: 0px 0px 50px rgba(0,0,0,0.7);
-        animation: fadeIn 1.2s ease-in-out;
+        box-shadow: 0px 0px 40px rgba(0,0,0,0.6);
+        animation: fadeIn 1s ease-in-out;
+        color: white;
     }
 
     @keyframes fadeIn {
@@ -61,8 +64,9 @@ def login_background():
     }
 
     .stTextInput input {
-        background-color: #111827 !important;
+        background-color: rgba(255,255,255,0.1) !important;
         color: white !important;
+        border-radius: 8px;
     }
 
     .stButton button {
@@ -75,11 +79,12 @@ def login_background():
     </style>
 
     <video autoplay muted loop class="video-bg">
-        <source src="https://cdn.coverr.co/videos/coverr-working-on-data-analytics-5173/1080p.mp4" type="video/mp4">
+        <source src="https://cdn.coverr.co/videos/coverr-data-analysis-5173/1080p.mp4" type="video/mp4">
     </video>
 
     <div class="overlay"></div>
     """, unsafe_allow_html=True)
+
 
 # =============================
 # MAIN DASHBOARD BACKGROUND
@@ -244,4 +249,5 @@ else:
 
     else:
         st.info("Upload both CSV files to begin.")
+
 
