@@ -26,18 +26,27 @@ def login_background():
     st.markdown("""
         <style>
         .stApp {
-            background-image: url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+            background: linear-gradient(135deg, #eef2f3, #d9e4f5);
         }
-        .login-box {
-            background: rgba(0,0,0,0.75);
-            padding: 40px;
-            border-radius: 15px;
+
+        h1, h2, h3, label, p {
+            color: #1f2937 !important;
+        }
+
+        .stTextInput > div > div > input {
+            background-color: white;
+            color: black;
+        }
+
+        .stButton > button {
+            background-color: #2563eb;
+            color: white;
+            border-radius: 8px;
+            padding: 8px 16px;
         }
         </style>
     """, unsafe_allow_html=True)
+
 
 # ------------------------------
 # MAIN PAGE STYLING
@@ -46,18 +55,36 @@ def main_background():
     st.markdown("""
         <style>
         .stApp {
-            background-image: url("https://images.unsplash.com/photo-1551288049-bebda4e38f71");
+            background-image: url("https://images.unsplash.com/photo-1558494949-ef010cbdcc31");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
         }
+
         .block-container {
-            background: rgba(0,0,0,0.7);
+            background: rgba(255,255,255,0.92);
             padding: 30px;
             border-radius: 15px;
         }
+
+        h1, h2, h3, label {
+            color: #111827 !important;
+        }
+
+        .stMetric {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .stButton > button {
+            background-color: #1d4ed8;
+            color: white;
+            border-radius: 8px;
+        }
         </style>
     """, unsafe_allow_html=True)
+
 
 # ------------------------------
 # CREATE ACCOUNT PAGE
@@ -205,3 +232,4 @@ elif st.session_state.page == "create":
 
 elif st.session_state.page == "main":
     main_app()
+
