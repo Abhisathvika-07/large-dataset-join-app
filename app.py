@@ -8,44 +8,44 @@ from sklearn.cluster import KMeans
 import io
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
+st.set_page_config(page_title="Data Fusion Dashboard", layout="wide")
 
-# ---------------- DARK PROFESSIONAL THEME ----------------
+# ---------------- DARK NAVY THEME ----------------
 st.markdown("""
 <style>
 .stApp {
     background-color: #0b1f3a;
-    color: white;
 }
 section[data-testid="stSidebar"] {
     background-color: #071426;
 }
-h1, h2, h3, h4 {
-    color: #ffffff;
+h1, h2, h3, h4, label {
+    color: #ffffff !important;
 }
 .stButton>button {
     background-color: #1f3c88;
     color: white;
     border-radius: 6px;
 }
-.stSelectbox div[data-baseweb="select"] {
-    background-color: #1b2c4a;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- LOGIN SYSTEM ----------------
+# ---------------- SESSION STATE ----------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "users" not in st.session_state:
     st.session_state.users = {"admin": "admin123"}
 
+# ==============================
+# LOGIN PAGE
+# ==============================
 def login_page():
     st.title("🔐 Secure Login")
+
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     if col1.button("Login"):
         if username in st.session_state.users and st.session_state.users[username] == password:
@@ -58,8 +58,11 @@ def login_page():
     if col2.button("Create Account"):
         st.session_state.show_create = True
 
-    if st.button("Forgot Password"):
-        st.info("Contact Admin to reset password")
+    if col3.button("Forgot Password"):
+        if username in st.session_state.users:
+            st.info(f"Password: {st.session_state.users[username]}")
+        else:
+            st.warning("Enter valid username to recover password")
 
 def create_account():
     st.title("🆕 Create Account")
@@ -68,10 +71,11 @@ def create_account():
 
     if st.button("Register"):
         st.session_state.users[new_user] = new_pass
-        st.success("Account Created! Please Login.")
+        st.success("Account created! Please login.")
         st.session_state.show_create = False
         st.rerun()
 
+# ---------------- AUTH ROUTING ----------------
 if not st.session_state.logged_in:
     if "show_create" in st.session_state and st.session_state.show_create:
         create_account()
@@ -79,14 +83,29 @@ if not st.session_state.logged_in:
         login_page()
     st.stop()
 
-# ---------------- MAIN APP ----------------
+# ==============================
+# MAIN DASHBOARD
+# ==============================
+
 st.title("📊 Multi-Dataset Fusion Dashboard")
 
-if st.button("Logout"):
+# -------- LOGOUT IN MAIN PAGE --------
+main_logout_col = st.columns([8,1])
+with main_logout_col[1]:
+    if st.button("🚪 Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+# -------- SIDEBAR --------
+st.sidebar.title("📁 Upload Datasets")
+
+# -------- LOGOUT IN SIDEBAR --------
+st.sidebar.markdown("## 🔐 Account")
+if st.sidebar.button("🚪 Logout", use_container_width=True):
     st.session_state.logged_in = False
     st.rerun()
 
-# ---------------- DOMAINS ----------------
+# -------- DOMAINS --------
 domains = [
     "Education Analytics",
     "Healthcare Management",
@@ -102,15 +121,14 @@ domains = [
 
 domain = st.selectbox("📂 Select Business Domain", domains)
 
-# ---------------- SIDEBAR UPLOAD ----------------
-st.sidebar.title("📁 Upload Datasets")
+# -------- FILE UPLOAD --------
 uploaded_files = st.sidebar.file_uploader(
     "Upload Files (CSV, Excel, JSON)",
     type=["csv", "xlsx", "json"],
     accept_multiple_files=True
 )
 
-# ---------------- FILE READING ----------------
+# -------- FILE LOADER --------
 @st.cache_data
 def load_file(file):
     if file.name.endswith(".csv"):
@@ -120,51 +138,47 @@ def load_file(file):
     elif file.name.endswith(".json"):
         return pd.read_json(file)
 
+# -------- PROCESS --------
 if uploaded_files and len(uploaded_files) >= 2:
 
     df_list = [load_file(f) for f in uploaded_files]
 
-    # ---------------- AUTO DETECT COMMON COLUMNS ----------------
+    # AUTO DETECT JOIN KEYS
     common_cols = set(df_list[0].columns)
     for df in df_list[1:]:
         common_cols = common_cols.intersection(set(df.columns))
 
-    if len(common_cols) == 0:
+    if not common_cols:
         st.error("❌ No common join columns detected.")
         st.stop()
 
     join_column = st.selectbox("🔍 Auto Detected Join Columns", list(common_cols))
     join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
-    # ---------------- MERGE ----------------
     final = df_list[0]
     for df in df_list[1:]:
         final = final.merge(df, on=join_column, how=join_type)
 
     st.success("Datasets merged successfully!")
 
-    # ---------------- DATA CLEANING ----------------
+    # -------- DATA CLEANING --------
     st.subheader("🧹 Data Cleaning Options")
-    remove_dup = st.checkbox("Remove Duplicates")
-    drop_null = st.checkbox("Drop Null Rows")
-    normalize = st.checkbox("Normalize Numeric Columns")
-
-    if remove_dup:
+    if st.checkbox("Remove Duplicates"):
         final = final.drop_duplicates()
-    if drop_null:
+    if st.checkbox("Drop Null Rows"):
         final = final.dropna()
-    if normalize:
+    if st.checkbox("Normalize Numeric Columns"):
         scaler = MinMaxScaler()
         num_cols = final.select_dtypes(include=np.number).columns
         final[num_cols] = scaler.fit_transform(final[num_cols])
 
-    # ---------------- KPI CARDS ----------------
+    # -------- KPI --------
     col1, col2, col3 = st.columns(3)
     col1.metric("Rows", final.shape[0])
     col2.metric("Columns", final.shape[1])
     col3.metric("Missing Values", final.isnull().sum().sum())
 
-    # ---------------- CHARTS ----------------
+    # -------- CHARTS --------
     st.subheader("📈 Visual Analytics")
 
     numeric_cols = final.select_dtypes(include=np.number).columns
@@ -183,12 +197,11 @@ if uploaded_files and len(uploaded_files) >= 2:
         fig_line = px.line(final[selected_col])
         st.plotly_chart(fig_line, use_container_width=True)
 
-        # Correlation Heatmap
         corr = final[numeric_cols].corr()
         fig_heat = px.imshow(corr, text_auto=True)
         st.plotly_chart(fig_heat, use_container_width=True)
 
-    # ---------------- ML OPTION ----------------
+    # -------- ML OPTION --------
     st.subheader("🤖 ML Option")
 
     if len(numeric_cols) >= 2:
@@ -198,7 +211,7 @@ if uploaded_files and len(uploaded_files) >= 2:
         if st.button("Run Regression"):
             model = LinearRegression()
             model.fit(features, final[target])
-            st.success("Regression Model Trained Successfully")
+            st.success("Regression Model Trained")
 
         if st.button("Run Clustering"):
             kmeans = KMeans(n_clusters=3)
@@ -206,7 +219,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             st.success("Clustering Complete")
             st.dataframe(final.head())
 
-    # ---------------- EXPORT ----------------
+    # -------- EXPORT --------
     st.subheader("⬇ Export Data")
 
     csv = final.to_csv(index=False).encode()
@@ -221,4 +234,3 @@ if uploaded_files and len(uploaded_files) >= 2:
 
 else:
     st.info("Upload at least 2 files to begin.")
-
