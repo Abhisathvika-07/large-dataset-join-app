@@ -49,7 +49,18 @@ if file1 and file2:
 
             st.metric("Total Rows", len(final))
 
+        csv = final.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="Download Joined Dataset",
+    data=csv,
+    file_name="joined_dataset.csv",
+    mime="text/csv",
+)
+
+
         else:
             st.error(f"Selected dataset must contain column '{join_column}'")
+
 
 
