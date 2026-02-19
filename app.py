@@ -1,246 +1,224 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
+import plotly.figure_factory as ff
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
-# -----------------------------
-# SESSION STATE INIT
-# -----------------------------
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+st.set_page_config(page_title="Enterprise AI Data Fusion Platform", layout="wide")
 
-if "users" not in st.session_state:
-    st.session_state.users = {"admin": "admin123"}
+st.title("🚀 Enterprise AI Data Fusion & Analytics Platform")
 
-# -----------------------------
-# PAGE CONFIG
-# -----------------------------
-st.set_page_config(page_title="Enterprise Data Platform", layout="wide")
+# ===============================
+# CACHED FILE LOADER
+# ===============================
+@st.cache_data
+def load_file(file):
+    if file.name.endswith(".csv"):
+        return pd.read_csv(file)
+    elif file.name.endswith(".xlsx"):
+        return pd.read_excel(file)
+    elif file.name.endswith(".json"):
+        return pd.read_json(file)
+    else:
+        return None
 
-# =============================
-# LOGIN BACKGROUND (ANIMATED)
-# =============================
-def login_background():
-    st.markdown("""
-    <style>
-    header, #MainMenu, footer {visibility: hidden;}
+# ===============================
+# FILE UPLOADER
+# ===============================
+st.sidebar.header("📂 Upload Datasets")
+uploaded_files = st.sidebar.file_uploader(
+    "Upload Multiple Files (CSV, Excel, JSON)",
+    type=["csv", "xlsx", "json"],
+    accept_multiple_files=True
+)
 
-    body {
-        margin: 0;
-        padding: 0;
-    }
+if uploaded_files:
 
-    /* Animated professional background */
-    .stApp {
-        background: linear-gradient(-45deg, #0f2027, #203a43, #2c5364, #1c1c1c);
-        background-size: 400% 400%;
-        animation: gradientMove 12s ease infinite;
-    }
+    dataframes = []
+    for file in uploaded_files:
+        df = load_file(file)
+        if df is not None:
+            df.columns = df.columns.str.strip()
+            dataframes.append(df)
 
-    @keyframes gradientMove {
-        0% {background-position: 0% 50%;}
-        50% {background-position: 100% 50%;}
-        100% {background-position: 0% 50%;}
-    }
+    if len(dataframes) >= 2:
 
-    .login-box {
-        background: rgba(255,255,255,0.08);
-        backdrop-filter: blur(15px);
-        padding: 50px;
-        border-radius: 20px;
-        width: 420px;
-        margin: auto;
-        margin-top: 120px;
-        box-shadow: 0px 0px 40px rgba(0,0,0,0.6);
-        color: white;
-        animation: fadeIn 1s ease-in-out;
-    }
+        # ===============================
+        # AUTO DETECT COMMON COLUMNS
+        # ===============================
+        common_cols = list(set(dataframes[0].columns)
+                           .intersection(*[set(df.columns) for df in dataframes[1:]]))
 
-    @keyframes fadeIn {
-        from {opacity: 0; transform: translateY(30px);}
-        to {opacity: 1; transform: translateY(0);}
-    }
+        st.subheader("🔗 Join Configuration")
 
-    .stTextInput input {
-        background-color: rgba(255,255,255,0.1) !important;
-        color: white !important;
-        border-radius: 8px;
-    }
+        if common_cols:
+            join_column = st.selectbox("Select Join Column", common_cols)
+            join_type = st.selectbox("Select Join Type", ["inner", "left", "right", "outer"])
+        else:
+            st.error("No common columns found between datasets.")
+            st.stop()
 
-    .stButton button {
-        background-color: #2563eb;
-        color: white;
-        border-radius: 8px;
-        padding: 10px 20px;
-    }
+        # ===============================
+        # MERGE ALL FILES
+        # ===============================
+        final = dataframes[0]
+        for df in dataframes[1:]:
+            final = final.merge(df, on=join_column, how=join_type)
 
-    </style>
-    """, unsafe_allow_html=True)
+        st.success("Datasets merged successfully!")
 
+        # ===============================
+        # DATA CLEANING OPTIONS
+        # ===============================
+        st.subheader("🧹 Data Cleaning Options")
 
+        col1, col2, col3, col4 = st.columns(4)
 
-# =============================
-# MAIN DASHBOARD BACKGROUND
-# =============================
-def dashboard_background():
-    st.markdown("""
-    <style>
-    .stApp {
-        background-image: url("https://images.unsplash.com/photo-1508780709619-79562169bc64");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-    }
+        if col1.checkbox("Remove Duplicates"):
+            final = final.drop_duplicates()
 
-    .main-container {
-        background: rgba(0,0,0,0.75);
-        padding: 30px;
-        border-radius: 15px;
-    }
+        if col2.checkbox("Drop Null Rows"):
+            final = final.dropna()
 
-    h1, h2, h3, label {
-        color: white !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+        if col3.checkbox("Fill Missing Values"):
+            final = final.fillna(final.mean(numeric_only=True))
 
-# =============================
-# LOGIN PAGE
-# =============================
-if not st.session_state.logged_in:
+        if col4.checkbox("Normalize Numeric Columns"):
+            scaler = StandardScaler()
+            numeric_cols = final.select_dtypes(include=np.number).columns
+            final[numeric_cols] = scaler.fit_transform(final[numeric_cols])
 
-    login_background()
+        # ===============================
+        # KPI DASHBOARD
+        # ===============================
+        st.subheader("📊 KPI Dashboard")
 
-    st.markdown("<div class='login-box'>", unsafe_allow_html=True)
-    st.markdown("## 🔐 Enterprise Secure Login")
+        k1, k2, k3 = st.columns(3)
 
-    option = st.radio("", ["Login", "Create Account"])
+        k1.metric("Total Rows", len(final))
+        k2.metric("Total Columns", len(final.columns))
+        k3.metric("Missing Values",
+                  int(final.isnull().sum().sum()))
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+        # ===============================
+        # DATA INSIGHTS
+        # ===============================
+        st.subheader("🔎 Automatic Data Insights")
 
-    if option == "Login":
-        if st.button("Login"):
-            if username in st.session_state.users and \
-               st.session_state.users[username] == password:
-                st.session_state.logged_in = True
-                st.rerun()
+        st.write("### 📌 Summary Statistics")
+        st.dataframe(final.describe())
+
+        st.write("### 📌 Top 5 Categories (Categorical Columns)")
+        cat_cols = final.select_dtypes(include="object").columns
+        for col in cat_cols[:3]:
+            st.write(f"Top values in **{col}**")
+            st.write(final[col].value_counts().head())
+
+        st.write("### 📌 Missing Values %")
+        missing_percent = (final.isnull().sum() / len(final)) * 100
+        st.dataframe(missing_percent)
+
+        # ===============================
+        # CORRELATION HEATMAP
+        # ===============================
+        numeric_cols = final.select_dtypes(include=np.number)
+
+        if len(numeric_cols.columns) > 1:
+            st.subheader("📈 Correlation Heatmap")
+            corr = numeric_cols.corr()
+            fig = px.imshow(corr, text_auto=True, aspect="auto")
+            st.plotly_chart(fig, use_container_width=True)
+
+        # ===============================
+        # AI GENERATED SUMMARY
+        # ===============================
+        st.subheader("🤖 AI Generated Summary")
+
+        summary_text = f"""
+        The merged dataset contains {len(final)} rows and {len(final.columns)} columns.
+        The dataset shows highest variation in numeric attributes.
+        The most frequent categorical value appears in '{cat_cols[0]}' column
+        with value '{final[cat_cols[0]].value_counts().idxmax()}'.
+        """
+        st.info(summary_text)
+
+        # ===============================
+        # ML SECTION
+        # ===============================
+        st.subheader("🧠 Machine Learning Module")
+
+        ml_option = st.selectbox(
+            "Select ML Task",
+            ["None", "Regression", "Classification", "Clustering"]
+        )
+
+        if ml_option != "None":
+
+            if len(numeric_cols.columns) >= 2:
+
+                target = st.selectbox("Select Target Column", numeric_cols.columns)
+                features = numeric_cols.drop(columns=[target])
+
+                if ml_option == "Regression":
+                    model = LinearRegression()
+                    model.fit(features, numeric_cols[target])
+                    preds = model.predict(features)
+                    st.success("Regression model trained successfully!")
+
+                elif ml_option == "Classification":
+                    model = RandomForestClassifier()
+                    y = pd.cut(numeric_cols[target], bins=3, labels=[0,1,2])
+                    model.fit(features, y)
+                    st.success("Classification model trained!")
+
+                elif ml_option == "Clustering":
+                    model = KMeans(n_clusters=3)
+                    clusters = model.fit_predict(features)
+                    final["Cluster"] = clusters
+                    st.success("Clustering completed!")
+
             else:
-                st.error("Invalid Credentials")
+                st.warning("Not enough numeric columns for ML.")
+
+        # ===============================
+        # EXPORT OPTIONS
+        # ===============================
+        st.subheader("⬇ Export Data")
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.download_button(
+            "Download CSV",
+            final.to_csv(index=False),
+            "final_dataset.csv",
+            "text/csv"
+        )
+
+        col2.download_button(
+            "Download Excel",
+            final.to_excel("temp.xlsx", index=False),
+            "final_dataset.xlsx"
+        )
+
+        col3.download_button(
+            "Download JSON",
+            final.to_json(orient="records"),
+            "final_dataset.json"
+        )
+
+        # ===============================
+        # FINAL DATA PREVIEW
+        # ===============================
+        st.subheader("📋 Final Dataset Preview")
+        st.dataframe(final.head(200), use_container_width=True)
 
     else:
-        if st.button("Create Account"):
-            if username in st.session_state.users:
-                st.warning("User already exists")
-            else:
-                st.session_state.users[username] = password
-                st.success("Account created successfully!")
+        st.warning("Please upload at least 2 files.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# =============================
-# DASHBOARD PAGE
-# =============================
 else:
-
-    dashboard_background()
-
-    st.title("📊 Enterprise Multi-Dataset Join Platform")
-
-    st.sidebar.title("Upload CSV Files")
-
-    file1 = st.sidebar.file_uploader("Upload First Dataset", type=["csv"])
-    file2 = st.sidebar.file_uploader("Upload Second Dataset", type=["csv"])
-
-    dataset_type = st.selectbox(
-        "Select Dataset Domain",
-        ["Education", "E-Commerce", "Healthcare", "Finance",
-         "Retail", "Marketing", "Banking", "HR Analytics"]
-    )
-
-    join_type = st.selectbox(
-        "Select Join Type",
-        ["inner", "left", "right", "outer"]
-    )
-
-    join_keys = {
-        "Education": "student_id",
-        "E-Commerce": "customer_id",
-        "Healthcare": "patient_id",
-        "Finance": "account_id",
-        "Retail": "product_id",
-        "Marketing": "campaign_id",
-        "Banking": "account_id",
-        "HR Analytics": "employee_id"
-    }
-
-    if file1 and file2:
-
-        with st.spinner("Processing large datasets..."):
-            df1 = pd.read_csv(file1, low_memory=False)
-            df2 = pd.read_csv(file2, low_memory=False)
-
-            join_column = join_keys[dataset_type]
-
-            if join_column in df1.columns and join_column in df2.columns:
-
-                final = pd.merge(df1, df2, on=join_column, how=join_type)
-
-                st.success("Datasets joined successfully!")
-
-                # KPI CARDS
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Rows", len(final))
-                col2.metric("Total Columns", len(final.columns))
-                col3.metric("Null Values", final.isnull().sum().sum())
-
-                st.subheader("Preview Data")
-                st.dataframe(final.head(100), use_container_width=True)
-
-                csv = final.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "Download Merged Dataset",
-                    csv,
-                    "merged_dataset.csv",
-                    "text/csv"
-                )
-
-                # CHARTS
-                numeric_cols = final.select_dtypes(include=["int64", "float64"]).columns
-
-                if len(numeric_cols) > 0:
-                    selected_col = st.selectbox("Select Column for Chart", numeric_cols)
-
-                    colA, colB = st.columns(2)
-
-                    with colA:
-                        fig_bar = px.bar(
-                            final[selected_col].value_counts().head(10),
-                            title="Bar Chart"
-                        )
-                        st.plotly_chart(fig_bar, use_container_width=True)
-
-                    with colB:
-                        fig_pie = px.pie(
-                            final,
-                            names=selected_col,
-                            title="Pie Chart"
-                        )
-                        st.plotly_chart(fig_pie, use_container_width=True)
-
-                    fig_line = px.line(
-                        final[selected_col].head(50),
-                        title="Line Chart Trend"
-                    )
-                    st.plotly_chart(fig_line, use_container_width=True)
-
-                else:
-                    st.info("No numeric columns available for charts.")
-
-            else:
-                st.error(f"Column '{join_column}' not found in both datasets.")
-
-    else:
-        st.info("Upload both CSV files to begin.")
-
-
+    st.info("Upload datasets to begin analysis.")
 
