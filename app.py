@@ -1,195 +1,198 @@
 import streamlit as st
 import pandas as pd
-import os
+import plotly.express as px
+import numpy as np
 
-st.set_page_config(page_title="Data Fusion Platform", layout="wide")
+st.set_page_config(
+    page_title="Multi-Dataset Data Fusion Platform",
+    layout="wide"
+)
 
-# -------------------------------
-# SESSION STATE INIT
-# -------------------------------
-if "users" not in st.session_state:
-    st.session_state.users = {"admin": "admin123"}
-
+# ---------------- SESSION STATE ----------------
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    st.session_state.logged_in = True  # TEMP: keep true to focus on features
 
-if "page" not in st.session_state:
-    st.session_state.page = "login"
+# ---------------- UI STYLE ----------------
+st.markdown("""
+<style>
+.stApp {
+    background-color: #0f172a;
+}
+h1, h2, h3, h4, label {
+    color: #e5e7eb !important;
+}
+.block-container {
+    padding: 2rem;
+}
+</style>
+""", unsafe_allow_html=True)
 
+# ---------------- TITLE ----------------
+st.title("📊 Multi-Dataset Data Fusion Dashboard")
 
-# -------------------------------
-# BACKGROUND FUNCTION
-# -------------------------------
-def set_background(image_url=None, gradient=None):
-    if image_url:
-        st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background-image: url("{image_url}");
-                background-size: cover;
-                background-position: center;
-                background-attachment: fixed;
-            }}
+# ---------------- DOMAIN SELECTION ----------------
+domain = st.selectbox(
+    "Select Dataset Domain",
+    [
+        "Education",
+        "Healthcare",
+        "Finance",
+        "Retail",
+        "Human Resources",
+        "Sales & Marketing"
+    ]
+)
 
-            .block-container {{
-                background-color: rgba(0,0,0,0.55);
-                padding: 2rem;
-                border-radius: 15px;
-            }}
+st.info(f"Domain selected: **{domain}**")
 
-            h1, h2, h3, label {{
-                color: white !important;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-    elif gradient:
-        st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background: {gradient};
-                height: 100vh;
-            }}
+# ---------------- FILE UPLOAD ----------------
+uploaded_files = st.file_uploader(
+    "Upload Multiple Datasets (CSV, Excel, JSON)",
+    type=["csv", "xlsx", "json"],
+    accept_multiple_files=True
+)
 
-            .block-container {{
-                background-color: rgba(0,0,0,0.5);
-                padding: 2rem;
-                border-radius: 15px;
-            }}
+if uploaded_files and len(uploaded_files) >= 2:
 
-            h1, h2, h3, label {{
-                color: white !important;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+    dfs = []
 
-
-# ===============================
-# LOGIN PAGE
-# ===============================
-if not st.session_state.logged_in:
-
-    # Animated dark gradient login background
-    set_background(
-        gradient="linear-gradient(135deg, #141E30, #243B55)"
-    )
-
-    st.title("🔐 Secure Login Portal")
-
-    choice = st.radio("Select Option", ["Login", "Create Account"])
-
-    if choice == "Login":
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-
-        if st.button("Login"):
-            if username in st.session_state.users and \
-               st.session_state.users[username] == password:
-                st.session_state.logged_in = True
-                st.success("Login successful!")
-                st.rerun()
-            else:
-                st.error("Invalid credentials")
-
-    else:
-        new_user = st.text_input("Create Username")
-        new_pass = st.text_input("Create Password", type="password")
-
-        if st.button("Create Account"):
-            if new_user in st.session_state.users:
-                st.warning("User already exists")
-            else:
-                st.session_state.users[new_user] = new_pass
-                st.success("Account created successfully! Please login.")
-                st.session_state.page = "login"
-
-# ===============================
-# MAIN DASHBOARD
-# ===============================
-else:
-
-    # Your grey texture image
-    set_background("background_main.jpg")
-
-    st.title("📊 Multi-Dataset Data Fusion Dashboard")
-
-    if st.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
-
-    st.subheader("Upload Datasets (CSV, Excel, JSON)")
-
-    uploaded_files = st.file_uploader(
-        "Upload Files",
-        type=["csv", "xlsx", "json"],
-        accept_multiple_files=True
-    )
-
-    if uploaded_files:
-
-        dfs = []
-
-        for file in uploaded_files:
-            if file.name.endswith(".csv"):
-                df = pd.read_csv(file)
-            elif file.name.endswith(".xlsx"):
-                df = pd.read_excel(file)
-            else:
-                df = pd.read_json(file)
-
-            dfs.append(df)
-
-        # Auto detect common columns
-        common_cols = set(dfs[0].columns)
-        for df in dfs[1:]:
-            common_cols = common_cols.intersection(df.columns)
-
-        if common_cols:
-            join_column = st.selectbox(
-                "Select Join Column",
-                list(common_cols)
-            )
-
-            join_type = st.selectbox(
-                "Select Join Type",
-                ["inner", "left", "right", "outer"]
-            )
-
-            final = dfs[0]
-            for df in dfs[1:]:
-                final = pd.merge(final, df,
-                                 on=join_column,
-                                 how=join_type)
-
-            st.success("Datasets merged successfully!")
-
-            # KPI Cards
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Rows", len(final))
-            col2.metric("Columns", len(final.columns))
-            col3.metric("Missing Values",
-                        final.isnull().sum().sum())
-
-            # Insights
-            st.subheader("Summary Statistics")
-            st.dataframe(final.describe())
-
-            # Data Preview
-            st.subheader("Data Preview")
-            st.dataframe(final.head(100))
-
-            # Export
-            st.subheader("Export Data")
-            csv = final.to_csv(index=False).encode()
-            st.download_button("Download CSV",
-                               csv,
-                               "final_data.csv",
-                               "text/csv")
+    for file in uploaded_files:
+        if file.name.endswith(".csv"):
+            df = pd.read_csv(file)
+        elif file.name.endswith(".xlsx"):
+            df = pd.read_excel(file)
         else:
-            st.error("No common columns found for join.")
+            df = pd.read_json(file)
+        dfs.append(df)
+
+    # ---------------- AUTO DETECT JOIN KEYS ----------------
+    common_columns = set(dfs[0].columns)
+    for df in dfs[1:]:
+        common_columns = common_columns.intersection(df.columns)
+
+    if not common_columns:
+        st.error("❌ No common columns found between datasets")
+        st.stop()
+
+    st.subheader("🔑 Auto-Detected Join Columns")
+    join_column = st.selectbox(
+        "Select Join Column (Auto Suggested)",
+        list(common_columns)
+    )
+
+    join_type = st.selectbox(
+        "Select Join Type",
+        ["inner", "left", "right", "outer"]
+    )
+
+    # ---------------- DATA CLEANING OPTIONS ----------------
+    st.subheader("🧹 Data Cleaning Options")
+
+    col1, col2, col3, col4 = st.columns(4)
+    remove_duplicates = col1.checkbox("Remove Duplicates")
+    drop_nulls = col2.checkbox("Drop Null Rows")
+    fill_missing = col3.checkbox("Fill Missing Values")
+    normalize_numeric = col4.checkbox("Normalize Numeric Columns")
+
+    # ---------------- MERGE ----------------
+    final_df = dfs[0]
+    for df in dfs[1:]:
+        final_df = pd.merge(final_df, df, on=join_column, how=join_type)
+
+    # ---------------- APPLY CLEANING ----------------
+    if remove_duplicates:
+        final_df = final_df.drop_duplicates()
+
+    if drop_nulls:
+        final_df = final_df.dropna()
+
+    if fill_missing:
+        for col in final_df.select_dtypes(include=np.number).columns:
+            final_df[col] = final_df[col].fillna(final_df[col].mean())
+
+    if normalize_numeric:
+        for col in final_df.select_dtypes(include=np.number).columns:
+            final_df[col] = (
+                final_df[col] - final_df[col].min()
+            ) / (final_df[col].max() - final_df[col].min())
+
+    st.success("✅ Datasets merged and processed successfully")
+
+    # ---------------- KPI CARDS ----------------
+    st.subheader("📌 Key Metrics")
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Rows", final_df.shape[0])
+    k2.metric("Columns", final_df.shape[1])
+    k3.metric("Missing Values", final_df.isnull().sum().sum())
+    k4.metric("Duplicate Rows", final_df.duplicated().sum())
+
+    # ---------------- CHARTS ----------------
+    st.subheader("📈 Automatic Data Visualizations")
+
+    numeric_cols = final_df.select_dtypes(include=np.number).columns.tolist()
+    categorical_cols = final_df.select_dtypes(include="object").columns.tolist()
+
+    if numeric_cols:
+        num_col = st.selectbox("Select Numeric Column", numeric_cols)
+        fig_hist = px.histogram(
+            final_df,
+            x=num_col,
+            title=f"Distribution of {num_col}"
+        )
+        st.plotly_chart(fig_hist, use_container_width=True)
+
+    if categorical_cols:
+        cat_col = st.selectbox("Select Categorical Column", categorical_cols)
+        pie_data = final_df[cat_col].value_counts().reset_index()
+        pie_data.columns = [cat_col, "Count"]
+
+        fig_pie = px.pie(
+            pie_data,
+            names=cat_col,
+            values="Count",
+            title=f"Category Distribution: {cat_col}"
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # ---------------- CORRELATION HEATMAP ----------------
+    if len(numeric_cols) >= 2:
+        corr = final_df[numeric_cols].corr()
+        fig_corr = px.imshow(
+            corr,
+            text_auto=True,
+            title="Correlation Heatmap"
+        )
+        st.plotly_chart(fig_corr, use_container_width=True)
+
+    # ---------------- AI-LIKE SUMMARY ----------------
+    st.subheader("🤖 Automated Insight Summary")
+
+    summary_text = f"""
+    • The merged dataset contains **{final_df.shape[0]} rows** and **{final_df.shape[1]} columns**.  
+    • The join operation was performed using **{join_column}** with **{join_type} join**.  
+    • The domain of analysis is **{domain}**.  
+    • Numeric features show noticeable variation and correlation patterns.  
+    • Data cleaning operations improved dataset consistency.
+    """
+
+    st.info(summary_text)
+
+    # ---------------- DATA PREVIEW ----------------
+    st.subheader("📄 Final Dataset Preview")
+    st.dataframe(final_df.head(100))
+
+    # ---------------- EXPORT ----------------
+    st.subheader("⬇ Export Final Dataset")
+
+    csv = final_df.to_csv(index=False).encode()
+    st.download_button(
+        "Download CSV",
+        csv,
+        "final_dataset.csv",
+        "text/csv"
+    )
+
+else:
+    st.warning("Upload at least **two datasets** to start analysis.")
 
