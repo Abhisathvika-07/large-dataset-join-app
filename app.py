@@ -143,94 +143,161 @@ if uploaded_files and len(uploaded_files) >= 2:
 
     df_list = [load_file(f) for f in uploaded_files]
 
-    # AUTO DETECT JOIN KEYS
+    # Clean column names
+    df_list = [df.rename(columns=lambda x: x.strip()) for df in df_list]
+
+    # -----------------------------
+    # AUTO DETECT COMMON COLUMNS
+    # -----------------------------
     common_cols = set(df_list[0].columns)
     for df in df_list[1:]:
         common_cols = common_cols.intersection(set(df.columns))
 
     if not common_cols:
-        st.error("❌ No common join columns detected.")
+        st.error("❌ No common columns detected between datasets.")
         st.stop()
 
-    join_column = st.selectbox("🔍 Auto Detected Join Columns", list(common_cols))
+    # -----------------------------
+    # DOMAIN INTELLIGENT SUGGESTION
+    # -----------------------------
+    domain_key_map = {
+        "Education Analytics": ["student_id", "roll_no", "studentID"],
+        "Healthcare Management": ["patient_id", "patientID", "medical_id"],
+        "E-Commerce & Retail": ["order_id", "customer_id", "product_id"],
+        "Banking & Finance": ["account_id", "customer_id"],
+        "HR Management": ["employee_id", "emp_id"],
+        "Supply Chain": ["shipment_id", "order_id"],
+        "Telecommunications": ["customer_id", "phone_number"],
+        "Real Estate": ["property_id", "agent_id"],
+        "Social Media Analytics": ["user_id", "account_id"],
+        "Manufacturing": ["product_id", "batch_id"]
+    }
+
+    suggested_keys = []
+    for key in domain_key_map.get(domain, []):
+        if key in common_cols:
+            suggested_keys.append(key)
+
+    st.subheader("🔍 Join Column Selection")
+
+    if suggested_keys:
+        st.success(f"Suggested join column(s) for {domain}: {suggested_keys}")
+        join_column = st.selectbox(
+            "Select Join Column",
+            suggested_keys + list(common_cols)
+        )
+    else:
+        st.warning("No domain-specific key found. Select manually.")
+        join_column = st.selectbox("Select Join Column", list(common_cols))
+
     join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
-    final = df_list[0]
-    for df in df_list[1:]:
-        final = final.merge(df, on=join_column, how=join_type)
+    # -----------------------------
+    # MERGE BUTTON (Controlled Execution)
+    # -----------------------------
+    if st.button("🚀 Merge Datasets"):
 
-    st.success("Datasets merged successfully!")
+        final = df_list[0]
+        for df in df_list[1:]:
+            final = final.merge(df, on=join_column, how=join_type)
 
-    # -------- DATA CLEANING --------
-    st.subheader("🧹 Data Cleaning Options")
-    if st.checkbox("Remove Duplicates"):
-        final = final.drop_duplicates()
-    if st.checkbox("Drop Null Rows"):
-        final = final.dropna()
-    if st.checkbox("Normalize Numeric Columns"):
-        scaler = MinMaxScaler()
-        num_cols = final.select_dtypes(include=np.number).columns
-        final[num_cols] = scaler.fit_transform(final[num_cols])
+        st.success("Datasets merged successfully!")
 
-    # -------- KPI --------
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Rows", final.shape[0])
-    col2.metric("Columns", final.shape[1])
-    col3.metric("Missing Values", final.isnull().sum().sum())
+        # -----------------------------
+        # DATA CLEANING
+        # -----------------------------
+        st.subheader("🧹 Data Cleaning Options")
 
-    # -------- CHARTS --------
-    st.subheader("📈 Visual Analytics")
+        if st.checkbox("Remove Duplicates"):
+            final = final.drop_duplicates()
 
-    numeric_cols = final.select_dtypes(include=np.number).columns
+        if st.checkbox("Drop Null Rows"):
+            final = final.dropna()
 
-    if len(numeric_cols) > 0:
-        selected_col = st.selectbox("Select Numeric Column", numeric_cols)
+        if st.checkbox("Normalize Numeric Columns"):
+            scaler = MinMaxScaler()
+            num_cols = final.select_dtypes(include=np.number).columns
+            final[num_cols] = scaler.fit_transform(final[num_cols])
 
-        col1, col2 = st.columns(2)
+        # -----------------------------
+        # KPI SECTION
+        # -----------------------------
+        st.subheader("📊 KPI Overview")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Rows", final.shape[0])
+        col2.metric("Columns", final.shape[1])
+        col3.metric("Missing Values", final.isnull().sum().sum())
 
-        fig_bar = px.bar(final[selected_col].value_counts().head(10))
-        col1.plotly_chart(fig_bar, use_container_width=True)
+        # -----------------------------
+        # AUTOMATIC INSIGHTS
+        # -----------------------------
+        st.subheader("🧠 Auto Insights")
 
-        fig_pie = px.pie(final, names=selected_col)
-        col2.plotly_chart(fig_pie, use_container_width=True)
+        st.write("Missing Value %:")
+        st.write((final.isnull().sum() / len(final) * 100).round(2))
 
-        fig_line = px.line(final[selected_col])
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.write("Duplicate Rows:", final.duplicated().sum())
 
-        corr = final[numeric_cols].corr()
-        fig_heat = px.imshow(corr, text_auto=True)
-        st.plotly_chart(fig_heat, use_container_width=True)
+        # -----------------------------
+        # VISUAL ANALYTICS
+        # -----------------------------
+        st.subheader("📈 Visual Analytics")
 
-    # -------- ML OPTION --------
-    st.subheader("🤖 ML Option")
+        numeric_cols = final.select_dtypes(include=np.number).columns
 
-    if len(numeric_cols) >= 2:
-        target = st.selectbox("Select Target Column", numeric_cols)
-        features = final[numeric_cols].drop(columns=[target])
+        if len(numeric_cols) > 0:
 
-        if st.button("Run Regression"):
-            model = LinearRegression()
-            model.fit(features, final[target])
-            st.success("Regression Model Trained")
+            selected_col = st.selectbox("Select Numeric Column", numeric_cols)
 
-        if st.button("Run Clustering"):
-            kmeans = KMeans(n_clusters=3)
-            final["Cluster"] = kmeans.fit_predict(features)
-            st.success("Clustering Complete")
-            st.dataframe(final.head())
+            colA, colB = st.columns(2)
 
-    # -------- EXPORT --------
-    st.subheader("⬇ Export Data")
+            fig_bar = px.bar(final[selected_col].value_counts().head(10))
+            colA.plotly_chart(fig_bar, use_container_width=True)
 
-    csv = final.to_csv(index=False).encode()
-    st.download_button("Download CSV", csv, "final_dataset.csv")
+            fig_pie = px.pie(final, names=selected_col)
+            colB.plotly_chart(fig_pie, use_container_width=True)
 
-    buffer = io.BytesIO()
-    final.to_excel(buffer, index=False)
-    st.download_button("Download Excel", buffer, "final_dataset.xlsx")
+            fig_line = px.line(final[selected_col])
+            st.plotly_chart(fig_line, use_container_width=True)
 
-    json_data = final.to_json().encode()
-    st.download_button("Download JSON", json_data, "final_dataset.json")
+            corr = final[numeric_cols].corr()
+            fig_heat = px.imshow(corr, text_auto=True)
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+        # -----------------------------
+        # ML OPTION
+        # -----------------------------
+        st.subheader("🤖 ML Option")
+
+        if len(numeric_cols) >= 2:
+            target = st.selectbox("Select Target Column", numeric_cols)
+            features = final[numeric_cols].drop(columns=[target])
+
+            if st.button("Run Regression"):
+                model = LinearRegression()
+                model.fit(features, final[target])
+                st.success("Regression Model Trained Successfully")
+
+            if st.button("Run Clustering"):
+                kmeans = KMeans(n_clusters=3)
+                final["Cluster"] = kmeans.fit_predict(features)
+                st.success("Clustering Complete")
+                st.dataframe(final.head())
+
+        # -----------------------------
+        # EXPORT
+        # -----------------------------
+        st.subheader("⬇ Export Data")
+
+        csv = final.to_csv(index=False).encode()
+        st.download_button("Download CSV", csv, "final_dataset.csv")
+
+        buffer = io.BytesIO()
+        final.to_excel(buffer, index=False)
+        st.download_button("Download Excel", buffer, "final_dataset.xlsx")
+
+        json_data = final.to_json().encode()
+        st.download_button("Download JSON", json_data, "final_dataset.json")
 
 else:
     st.info("Upload at least 2 files to begin.")
