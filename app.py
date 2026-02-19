@@ -24,29 +24,26 @@ def login_background():
     <style>
     header, #MainMenu, footer {visibility: hidden;}
 
-    .video-bg {
-        position: fixed;
-        right: 0;
-        bottom: 0;
-        min-width: 100%;
-        min-height: 100%;
-        object-fit: cover;
-        z-index: -2;
+    body {
+        margin: 0;
+        padding: 0;
     }
 
-    /* LIGHTER OVERLAY */
-    .overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.45);
-        z-index: -1;
+    /* Animated professional background */
+    .stApp {
+        background: linear-gradient(-45deg, #0f2027, #203a43, #2c5364, #1c1c1c);
+        background-size: 400% 400%;
+        animation: gradientMove 12s ease infinite;
+    }
+
+    @keyframes gradientMove {
+        0% {background-position: 0% 50%;}
+        50% {background-position: 100% 50%;}
+        100% {background-position: 0% 50%;}
     }
 
     .login-box {
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(255,255,255,0.08);
         backdrop-filter: blur(15px);
         padding: 50px;
         border-radius: 20px;
@@ -54,12 +51,12 @@ def login_background():
         margin: auto;
         margin-top: 120px;
         box-shadow: 0px 0px 40px rgba(0,0,0,0.6);
-        animation: fadeIn 1s ease-in-out;
         color: white;
+        animation: fadeIn 1s ease-in-out;
     }
 
     @keyframes fadeIn {
-        from {opacity: 0; transform: translateY(40px);}
+        from {opacity: 0; transform: translateY(30px);}
         to {opacity: 1; transform: translateY(0);}
     }
 
@@ -77,13 +74,8 @@ def login_background():
     }
 
     </style>
-
-    <video autoplay muted loop class="video-bg">
-        <source src="https://cdn.coverr.co/videos/coverr-data-analysis-5173/1080p.mp4" type="video/mp4">
-    </video>
-
-    <div class="overlay"></div>
     """, unsafe_allow_html=True)
+
 
 
 # =============================
@@ -249,5 +241,6 @@ else:
 
     else:
         st.info("Upload both CSV files to begin.")
+
 
 
