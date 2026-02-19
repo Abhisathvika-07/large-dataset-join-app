@@ -146,16 +146,63 @@ if uploaded_files and len(uploaded_files) >= 2:
     # Clean column names
     df_list = [df.rename(columns=lambda x: x.strip()) for df in df_list]
 
-    # -----------------------------
-    # AUTO DETECT COMMON COLUMNS
-    # -----------------------------
-    common_cols = set(df_list[0].columns)
-    for df in df_list[1:]:
-        common_cols = common_cols.intersection(set(df.columns))
+   
+    # ---------------- AUTO DETECT COMMON COLUMNS ----------------
+common_cols = set(df_list[0].columns)
+for df in df_list[1:]:
+    common_cols = common_cols.intersection(set(df.columns))
 
-    if not common_cols:
-        st.error("❌ No common columns detected between datasets.")
-        st.stop()
+if not common_cols:
+    st.error("❌ No common join columns detected across datasets.")
+    st.stop()
+
+# ---------------- DOMAIN INTELLIGENT SUGGESTION ----------------
+domain_key_map = {
+    "Education Analytics": ["student_id", "roll_no", "studentID"],
+    "Healthcare Management": ["patient_id", "patientID", "medical_id"],
+    "E-Commerce & Retail": ["order_id", "customer_id", "product_id"],
+    "Banking & Finance": ["account_id", "customer_id", "transaction_id"],
+    "HR Management": ["employee_id", "emp_id", "staff_id"],
+    "Supply Chain": ["shipment_id", "supplier_id", "order_id"],
+    "Telecommunications": ["subscriber_id", "customer_id", "phone_number"],
+    "Real Estate": ["property_id", "client_id"],
+    "Social Media Analytics": ["user_id", "profile_id"],
+    "Manufacturing": ["machine_id", "product_id", "batch_id"]
+}
+
+suggested_key = None
+
+if domain in domain_key_map:
+    for key in domain_key_map[domain]:
+        if key in common_cols:
+            suggested_key = key
+            break
+
+st.subheader("🔎 Join Column Selection")
+
+if suggested_key:
+    st.success(f"Suggested Join Column based on domain: **{suggested_key}**")
+    join_column = st.selectbox(
+        "Select Join Column",
+        list(common_cols),
+        index=list(common_cols).index(suggested_key)
+    )
+else:
+    st.info("No domain-specific key found. Select manually.")
+    join_column = st.selectbox("Select Join Column", list(common_cols))
+
+join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
+
+# ---------------- MERGE BUTTON ----------------
+if st.button("🚀 Merge Datasets"):
+    final = df_list[0]
+    for df in df_list[1:]:
+        final = final.merge(df, on=join_column, how=join_type)
+
+    st.success("Datasets merged successfully!")
+    st.session_state["final_df"] = final
+
+   
 
     # -----------------------------
     # DOMAIN INTELLIGENT SUGGESTION
@@ -301,3 +348,4 @@ if uploaded_files and len(uploaded_files) >= 2:
 
 else:
     st.info("Upload at least 2 files to begin.")
+
