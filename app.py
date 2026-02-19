@@ -1,17 +1,14 @@
 import streamlit as st
 import pandas as pd
-import io
+import os
 
-# ------------------------------
-# PAGE CONFIG
-# ------------------------------
-st.set_page_config(page_title="Enterprise AI Data Fusion", layout="wide")
+st.set_page_config(page_title="Data Fusion Platform", layout="wide")
 
-# ------------------------------
+# -------------------------------
 # SESSION STATE INIT
-# ------------------------------
+# -------------------------------
 if "users" not in st.session_state:
-    st.session_state.users = {"admin": "1234"}
+    st.session_state.users = {"admin": "admin123"}
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -19,217 +16,180 @@ if "logged_in" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
-# ------------------------------
-# LOGIN PAGE STYLING
-# ------------------------------
-def login_background():
-    st.markdown("""
-        <style>
-        .stApp {
-            background: linear-gradient(135deg, #eef2f3, #d9e4f5);
-        }
 
-        h1, h2, h3, label, p {
-            color: #1f2937 !important;
-        }
+# -------------------------------
+# BACKGROUND FUNCTION
+# -------------------------------
+def set_background(image_url=None, gradient=None):
+    if image_url:
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background-image: url("{image_url}");
+                background-size: cover;
+                background-position: center;
+                background-attachment: fixed;
+            }}
 
-        .stTextInput > div > div > input {
-            background-color: white;
-            color: black;
-        }
+            .block-container {{
+                background-color: rgba(0,0,0,0.55);
+                padding: 2rem;
+                border-radius: 15px;
+            }}
 
-        .stButton > button {
-            background-color: #2563eb;
-            color: white;
-            border-radius: 8px;
-            padding: 8px 16px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+            h1, h2, h3, label {{
+                color: white !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+    elif gradient:
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background: {gradient};
+                height: 100vh;
+            }}
 
+            .block-container {{
+                background-color: rgba(0,0,0,0.5);
+                padding: 2rem;
+                border-radius: 15px;
+            }}
 
-# ------------------------------
-# MAIN PAGE STYLING
-# ------------------------------
-def main_background():
-    st.markdown("""
-        <style>
-        .stApp {
-            background-image: url("https://images.unsplash.com/photo-1558494949-ef010cbdcc31");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }
-
-        .block-container {
-            background: rgba(255,255,255,0.92);
-            padding: 30px;
-            border-radius: 15px;
-        }
-
-        h1, h2, h3, label {
-            color: #111827 !important;
-        }
-
-        .stMetric {
-            background: #f3f4f6;
-            padding: 15px;
-            border-radius: 10px;
-        }
-
-        .stButton > button {
-            background-color: #1d4ed8;
-            color: white;
-            border-radius: 8px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+            h1, h2, h3, label {{
+                color: white !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
 
 
-# ------------------------------
-# CREATE ACCOUNT PAGE
-# ------------------------------
-def create_account():
-    login_background()
-
-    st.title("🆕 Create Account")
-
-    new_user = st.text_input("Create Username")
-    new_pass = st.text_input("Create Password", type="password")
-
-    if st.button("Register"):
-        if new_user in st.session_state.users:
-            st.error("User already exists")
-        else:
-            st.session_state.users[new_user] = new_pass
-            st.success("Account created successfully!")
-            st.session_state.page = "login"
-            st.rerun()
-
-    if st.button("Back to Login"):
-        st.session_state.page = "login"
-        st.rerun()
-
-# ------------------------------
+# ===============================
 # LOGIN PAGE
-# ------------------------------
-def login():
-    login_background()
+# ===============================
+if not st.session_state.logged_in:
 
-    st.title("🔐 Enterprise Secure Login")
+    # Animated dark gradient login background
+    set_background(
+        gradient="linear-gradient(135deg, #141E30, #243B55)"
+    )
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    st.title("🔐 Secure Login Portal")
 
-    if st.button("Login"):
-        if username in st.session_state.users and st.session_state.users[username] == password:
-            st.session_state.logged_in = True
-            st.session_state.page = "main"
-            st.rerun()
-        else:
-            st.error("Invalid Credentials")
+    choice = st.radio("Select Option", ["Login", "Create Account"])
 
-    st.write("---")
-    if st.button("Create Account"):
-        st.session_state.page = "create"
-        st.rerun()
+    if choice == "Login":
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
 
-# ------------------------------
-# MAIN APPLICATION
-# ------------------------------
-def main_app():
-    main_background()
+        if st.button("Login"):
+            if username in st.session_state.users and \
+               st.session_state.users[username] == password:
+                st.session_state.logged_in = True
+                st.success("Login successful!")
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
 
-    st.title("🚀 Enterprise AI Data Fusion & Analytics Platform")
+    else:
+        new_user = st.text_input("Create Username")
+        new_pass = st.text_input("Create Password", type="password")
+
+        if st.button("Create Account"):
+            if new_user in st.session_state.users:
+                st.warning("User already exists")
+            else:
+                st.session_state.users[new_user] = new_pass
+                st.success("Account created successfully! Please login.")
+                st.session_state.page = "login"
+
+# ===============================
+# MAIN DASHBOARD
+# ===============================
+else:
+
+    # Your grey texture image
+    set_background("background_main.jpg")
+
+    st.title("📊 Multi-Dataset Data Fusion Dashboard")
 
     if st.button("Logout"):
         st.session_state.logged_in = False
-        st.session_state.page = "login"
         st.rerun()
 
-    st.sidebar.header("Upload Datasets (CSV, Excel, JSON)")
+    st.subheader("Upload Datasets (CSV, Excel, JSON)")
 
-    uploaded_files = st.sidebar.file_uploader(
+    uploaded_files = st.file_uploader(
         "Upload Files",
         type=["csv", "xlsx", "json"],
         accept_multiple_files=True
     )
 
     if uploaded_files:
-        dataframes = []
+
+        dfs = []
 
         for file in uploaded_files:
             if file.name.endswith(".csv"):
                 df = pd.read_csv(file)
             elif file.name.endswith(".xlsx"):
                 df = pd.read_excel(file)
-            elif file.name.endswith(".json"):
+            else:
                 df = pd.read_json(file)
-            dataframes.append(df)
 
-        # Auto detect join column
-        common_columns = set(dataframes[0].columns)
-        for df in dataframes[1:]:
-            common_columns &= set(df.columns)
+            dfs.append(df)
 
-        if common_columns:
-            join_col = st.selectbox("Select Join Column", list(common_columns))
-            join_type = st.selectbox("Select Join Type", ["inner", "left", "right", "outer"])
+        # Auto detect common columns
+        common_cols = set(dfs[0].columns)
+        for df in dfs[1:]:
+            common_cols = common_cols.intersection(df.columns)
 
-            final = dataframes[0]
-            for df in dataframes[1:]:
-                final = pd.merge(final, df, on=join_col, how=join_type)
+        if common_cols:
+            join_column = st.selectbox(
+                "Select Join Column",
+                list(common_cols)
+            )
+
+            join_type = st.selectbox(
+                "Select Join Type",
+                ["inner", "left", "right", "outer"]
+            )
+
+            final = dfs[0]
+            for df in dfs[1:]:
+                final = pd.merge(final, df,
+                                 on=join_column,
+                                 how=join_type)
 
             st.success("Datasets merged successfully!")
 
-            # KPIs
+            # KPI Cards
             col1, col2, col3 = st.columns(3)
-            col1.metric("Rows", final.shape[0])
-            col2.metric("Columns", final.shape[1])
-            col3.metric("Missing Values", final.isnull().sum().sum())
+            col1.metric("Rows", len(final))
+            col2.metric("Columns", len(final.columns))
+            col3.metric("Missing Values",
+                        final.isnull().sum().sum())
 
-            st.subheader("Preview")
-            st.dataframe(final.head(100), use_container_width=True)
+            # Insights
+            st.subheader("Summary Statistics")
+            st.dataframe(final.describe())
 
-            # EXPORT OPTIONS
+            # Data Preview
+            st.subheader("Data Preview")
+            st.dataframe(final.head(100))
+
+            # Export
             st.subheader("Export Data")
-
-            colA, colB, colC = st.columns(3)
-
-            # CSV
             csv = final.to_csv(index=False).encode()
-            colA.download_button("Download CSV", csv, "data.csv", "text/csv")
-
-            # Excel
-            excel_buffer = io.BytesIO()
-            final.to_excel(excel_buffer, index=False, engine="openpyxl")
-            excel_buffer.seek(0)
-            colB.download_button(
-                "Download Excel",
-                excel_buffer,
-                "data.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-            # JSON
-            json_data = final.to_json(orient="records").encode()
-            colC.download_button("Download JSON", json_data, "data.json", "application/json")
-
+            st.download_button("Download CSV",
+                               csv,
+                               "final_data.csv",
+                               "text/csv")
         else:
-            st.error("No common column found to join.")
-
-    else:
-        st.info("Upload multiple datasets to begin analysis.")
-
-# ------------------------------
-# ROUTER
-# ------------------------------
-if st.session_state.page == "login":
-    login()
-
-elif st.session_state.page == "create":
-    create_account()
-
-elif st.session_state.page == "main":
-    main_app()
+            st.error("No common columns found for join.")
 
