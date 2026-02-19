@@ -1,224 +1,207 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.figure_factory as ff
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+import io
 
-st.set_page_config(page_title="Enterprise AI Data Fusion Platform", layout="wide")
+# ------------------------------
+# PAGE CONFIG
+# ------------------------------
+st.set_page_config(page_title="Enterprise AI Data Fusion", layout="wide")
 
-st.title("🚀 Enterprise AI Data Fusion & Analytics Platform")
+# ------------------------------
+# SESSION STATE INIT
+# ------------------------------
+if "users" not in st.session_state:
+    st.session_state.users = {"admin": "1234"}
 
-# ===============================
-# CACHED FILE LOADER
-# ===============================
-@st.cache_data
-def load_file(file):
-    if file.name.endswith(".csv"):
-        return pd.read_csv(file)
-    elif file.name.endswith(".xlsx"):
-        return pd.read_excel(file)
-    elif file.name.endswith(".json"):
-        return pd.read_json(file)
-    else:
-        return None
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-# ===============================
-# FILE UPLOADER
-# ===============================
-st.sidebar.header("📂 Upload Datasets")
-uploaded_files = st.sidebar.file_uploader(
-    "Upload Multiple Files (CSV, Excel, JSON)",
-    type=["csv", "xlsx", "json"],
-    accept_multiple_files=True
-)
+if "page" not in st.session_state:
+    st.session_state.page = "login"
 
-if uploaded_files:
+# ------------------------------
+# LOGIN PAGE STYLING
+# ------------------------------
+def login_background():
+    st.markdown("""
+        <style>
+        .stApp {
+            background-image: url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        .login-box {
+            background: rgba(0,0,0,0.75);
+            padding: 40px;
+            border-radius: 15px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-    dataframes = []
-    for file in uploaded_files:
-        df = load_file(file)
-        if df is not None:
-            df.columns = df.columns.str.strip()
+# ------------------------------
+# MAIN PAGE STYLING
+# ------------------------------
+def main_background():
+    st.markdown("""
+        <style>
+        .stApp {
+            background-image: url("https://images.unsplash.com/photo-1551288049-bebda4e38f71");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        .block-container {
+            background: rgba(0,0,0,0.7);
+            padding: 30px;
+            border-radius: 15px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+# ------------------------------
+# CREATE ACCOUNT PAGE
+# ------------------------------
+def create_account():
+    login_background()
+
+    st.title("🆕 Create Account")
+
+    new_user = st.text_input("Create Username")
+    new_pass = st.text_input("Create Password", type="password")
+
+    if st.button("Register"):
+        if new_user in st.session_state.users:
+            st.error("User already exists")
+        else:
+            st.session_state.users[new_user] = new_pass
+            st.success("Account created successfully!")
+            st.session_state.page = "login"
+            st.rerun()
+
+    if st.button("Back to Login"):
+        st.session_state.page = "login"
+        st.rerun()
+
+# ------------------------------
+# LOGIN PAGE
+# ------------------------------
+def login():
+    login_background()
+
+    st.title("🔐 Enterprise Secure Login")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if username in st.session_state.users and st.session_state.users[username] == password:
+            st.session_state.logged_in = True
+            st.session_state.page = "main"
+            st.rerun()
+        else:
+            st.error("Invalid Credentials")
+
+    st.write("---")
+    if st.button("Create Account"):
+        st.session_state.page = "create"
+        st.rerun()
+
+# ------------------------------
+# MAIN APPLICATION
+# ------------------------------
+def main_app():
+    main_background()
+
+    st.title("🚀 Enterprise AI Data Fusion & Analytics Platform")
+
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.page = "login"
+        st.rerun()
+
+    st.sidebar.header("Upload Datasets (CSV, Excel, JSON)")
+
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload Files",
+        type=["csv", "xlsx", "json"],
+        accept_multiple_files=True
+    )
+
+    if uploaded_files:
+        dataframes = []
+
+        for file in uploaded_files:
+            if file.name.endswith(".csv"):
+                df = pd.read_csv(file)
+            elif file.name.endswith(".xlsx"):
+                df = pd.read_excel(file)
+            elif file.name.endswith(".json"):
+                df = pd.read_json(file)
             dataframes.append(df)
 
-    if len(dataframes) >= 2:
-
-        # ===============================
-        # AUTO DETECT COMMON COLUMNS
-        # ===============================
-        common_cols = list(set(dataframes[0].columns)
-                           .intersection(*[set(df.columns) for df in dataframes[1:]]))
-
-        st.subheader("🔗 Join Configuration")
-
-        if common_cols:
-            join_column = st.selectbox("Select Join Column", common_cols)
-            join_type = st.selectbox("Select Join Type", ["inner", "left", "right", "outer"])
-        else:
-            st.error("No common columns found between datasets.")
-            st.stop()
-
-        # ===============================
-        # MERGE ALL FILES
-        # ===============================
-        final = dataframes[0]
+        # Auto detect join column
+        common_columns = set(dataframes[0].columns)
         for df in dataframes[1:]:
-            final = final.merge(df, on=join_column, how=join_type)
+            common_columns &= set(df.columns)
 
-        st.success("Datasets merged successfully!")
+        if common_columns:
+            join_col = st.selectbox("Select Join Column", list(common_columns))
+            join_type = st.selectbox("Select Join Type", ["inner", "left", "right", "outer"])
 
-        # ===============================
-        # DATA CLEANING OPTIONS
-        # ===============================
-        st.subheader("🧹 Data Cleaning Options")
+            final = dataframes[0]
+            for df in dataframes[1:]:
+                final = pd.merge(final, df, on=join_col, how=join_type)
 
-        col1, col2, col3, col4 = st.columns(4)
+            st.success("Datasets merged successfully!")
 
-        if col1.checkbox("Remove Duplicates"):
-            final = final.drop_duplicates()
+            # KPIs
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Rows", final.shape[0])
+            col2.metric("Columns", final.shape[1])
+            col3.metric("Missing Values", final.isnull().sum().sum())
 
-        if col2.checkbox("Drop Null Rows"):
-            final = final.dropna()
+            st.subheader("Preview")
+            st.dataframe(final.head(100), use_container_width=True)
 
-        if col3.checkbox("Fill Missing Values"):
-            final = final.fillna(final.mean(numeric_only=True))
+            # EXPORT OPTIONS
+            st.subheader("Export Data")
 
-        if col4.checkbox("Normalize Numeric Columns"):
-            scaler = StandardScaler()
-            numeric_cols = final.select_dtypes(include=np.number).columns
-            final[numeric_cols] = scaler.fit_transform(final[numeric_cols])
+            colA, colB, colC = st.columns(3)
 
-        # ===============================
-        # KPI DASHBOARD
-        # ===============================
-        st.subheader("📊 KPI Dashboard")
+            # CSV
+            csv = final.to_csv(index=False).encode()
+            colA.download_button("Download CSV", csv, "data.csv", "text/csv")
 
-        k1, k2, k3 = st.columns(3)
+            # Excel
+            excel_buffer = io.BytesIO()
+            final.to_excel(excel_buffer, index=False, engine="openpyxl")
+            excel_buffer.seek(0)
+            colB.download_button(
+                "Download Excel",
+                excel_buffer,
+                "data.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-        k1.metric("Total Rows", len(final))
-        k2.metric("Total Columns", len(final.columns))
-        k3.metric("Missing Values",
-                  int(final.isnull().sum().sum()))
+            # JSON
+            json_data = final.to_json(orient="records").encode()
+            colC.download_button("Download JSON", json_data, "data.json", "application/json")
 
-        # ===============================
-        # DATA INSIGHTS
-        # ===============================
-        st.subheader("🔎 Automatic Data Insights")
-
-        st.write("### 📌 Summary Statistics")
-        st.dataframe(final.describe())
-
-        st.write("### 📌 Top 5 Categories (Categorical Columns)")
-        cat_cols = final.select_dtypes(include="object").columns
-        for col in cat_cols[:3]:
-            st.write(f"Top values in **{col}**")
-            st.write(final[col].value_counts().head())
-
-        st.write("### 📌 Missing Values %")
-        missing_percent = (final.isnull().sum() / len(final)) * 100
-        st.dataframe(missing_percent)
-
-        # ===============================
-        # CORRELATION HEATMAP
-        # ===============================
-        numeric_cols = final.select_dtypes(include=np.number)
-
-        if len(numeric_cols.columns) > 1:
-            st.subheader("📈 Correlation Heatmap")
-            corr = numeric_cols.corr()
-            fig = px.imshow(corr, text_auto=True, aspect="auto")
-            st.plotly_chart(fig, use_container_width=True)
-
-        # ===============================
-        # AI GENERATED SUMMARY
-        # ===============================
-        st.subheader("🤖 AI Generated Summary")
-
-        summary_text = f"""
-        The merged dataset contains {len(final)} rows and {len(final.columns)} columns.
-        The dataset shows highest variation in numeric attributes.
-        The most frequent categorical value appears in '{cat_cols[0]}' column
-        with value '{final[cat_cols[0]].value_counts().idxmax()}'.
-        """
-        st.info(summary_text)
-
-        # ===============================
-        # ML SECTION
-        # ===============================
-        st.subheader("🧠 Machine Learning Module")
-
-        ml_option = st.selectbox(
-            "Select ML Task",
-            ["None", "Regression", "Classification", "Clustering"]
-        )
-
-        if ml_option != "None":
-
-            if len(numeric_cols.columns) >= 2:
-
-                target = st.selectbox("Select Target Column", numeric_cols.columns)
-                features = numeric_cols.drop(columns=[target])
-
-                if ml_option == "Regression":
-                    model = LinearRegression()
-                    model.fit(features, numeric_cols[target])
-                    preds = model.predict(features)
-                    st.success("Regression model trained successfully!")
-
-                elif ml_option == "Classification":
-                    model = RandomForestClassifier()
-                    y = pd.cut(numeric_cols[target], bins=3, labels=[0,1,2])
-                    model.fit(features, y)
-                    st.success("Classification model trained!")
-
-                elif ml_option == "Clustering":
-                    model = KMeans(n_clusters=3)
-                    clusters = model.fit_predict(features)
-                    final["Cluster"] = clusters
-                    st.success("Clustering completed!")
-
-            else:
-                st.warning("Not enough numeric columns for ML.")
-
-        # ===============================
-        # EXPORT OPTIONS
-        # ===============================
-        st.subheader("⬇ Export Data")
-
-        col1, col2, col3 = st.columns(3)
-
-        col1.download_button(
-            "Download CSV",
-            final.to_csv(index=False),
-            "final_dataset.csv",
-            "text/csv"
-        )
-
-        col2.download_button(
-            "Download Excel",
-            final.to_excel("temp.xlsx", index=False),
-            "final_dataset.xlsx"
-        )
-
-        col3.download_button(
-            "Download JSON",
-            final.to_json(orient="records"),
-            "final_dataset.json"
-        )
-
-        # ===============================
-        # FINAL DATA PREVIEW
-        # ===============================
-        st.subheader("📋 Final Dataset Preview")
-        st.dataframe(final.head(200), use_container_width=True)
+        else:
+            st.error("No common column found to join.")
 
     else:
-        st.warning("Please upload at least 2 files.")
+        st.info("Upload multiple datasets to begin analysis.")
 
-else:
-    st.info("Upload datasets to begin analysis.")
+# ------------------------------
+# ROUTER
+# ------------------------------
+if st.session_state.page == "login":
+    login()
 
+elif st.session_state.page == "create":
+    create_account()
+
+elif st.session_state.page == "main":
+    main_app()
