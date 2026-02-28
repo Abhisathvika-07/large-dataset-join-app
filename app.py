@@ -232,7 +232,7 @@ if st.session_state.final_df is not None:
 # -------- VISUALIZATION --------
 st.subheader("📊 Visual Analytics")
 
-numeric_cols = final.select_dtypes(include=[np.number]).columns
+numeric_cols = final.select_dtypes(include=["number"]).columns
 
 if len(numeric_cols) > 0:
 
@@ -290,5 +290,6 @@ if len(numeric_cols) > 0:
 
 else:
     st.info("Upload at least 2 related files to begin analysis.")
+
 
 
