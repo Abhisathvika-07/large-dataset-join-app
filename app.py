@@ -1,11 +1,28 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+import io
 
-st.set_page_config(page_title="Domain Pie Analytics Dashboard", layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
 
-st.title("📊 Domain-Based Pie Analytics Dashboard")
+# ---------------- DARK THEME ----------------
+st.markdown("""
+<style>
+.stApp { background-color: #0f1c2e; }
+section[data-testid="stSidebar"] { background-color: #0b1625; }
+h1, h2, h3, h4, label { color: white !important; }
+</style>
+""", unsafe_allow_html=True)
 
+# ---------------- SESSION ----------------
+if "final_df" not in st.session_state:
+    st.session_state.final_df = None
+
+# =========================
+# DOMAIN LIST
+# =========================
 domains = [
     "Education Analytics",
     "Healthcare Management",
@@ -19,19 +36,31 @@ domains = [
     "Manufacturing"
 ]
 
+st.title("📊 Multi-Dataset Fusion Dashboard")
+
 domain = st.selectbox("📂 Select Business Domain", domains)
 
+# =========================
+# FILE UPLOAD
+# =========================
 uploaded_files = st.sidebar.file_uploader(
     "Upload at least 2 related datasets",
-    type=["csv"],
+    type=["csv", "xlsx", "json"],
     accept_multiple_files=True
 )
 
 @st.cache_data
 def load_file(file):
-    return pd.read_csv(file)
+    if file.name.endswith(".csv"):
+        return pd.read_csv(file)
+    elif file.name.endswith(".xlsx"):
+        return pd.read_excel(file)
+    elif file.name.endswith(".json"):
+        return pd.read_json(file)
 
-# ---------------- MERGE ----------------
+# =========================
+# MERGE
+# =========================
 if uploaded_files and len(uploaded_files) >= 2:
 
     df_list = [load_file(f) for f in uploaded_files]
@@ -43,154 +72,77 @@ if uploaded_files and len(uploaded_files) >= 2:
 
     if common_cols:
         join_column = st.selectbox("Select Join Column", list(common_cols))
+        join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
         if st.button("Merge Datasets"):
             final = df_list[0]
             for df in df_list[1:]:
-                final = final.merge(df, on=join_column, how="inner")
+                final = final.merge(df, on=join_column, how=join_type)
 
             st.session_state.final_df = final
             st.success("Datasets merged successfully!")
     else:
         st.error("No common columns found.")
 
-# ---------------- SMART FINDER ----------------
-def find_column(columns, keywords):
-    for col in columns:
-        for key in keywords:
-            if key in col:
-                return col
-    return None
-
-# ---------------- VISUALIZATION ----------------
-if "final_df" in st.session_state:
+# =========================
+# AFTER MERGE
+# =========================
+if st.session_state.final_df is not None:
 
     final = st.session_state.final_df
     final.columns = final.columns.str.lower()
-    columns = final.columns
 
-    st.subheader("📊 Domain-Based Pie Chart Insight")
+    st.subheader("🧹 Data Cleaning")
 
-    # ======================================================
-    # EDUCATION
-    # ======================================================
-    if domain == "Education Analytics":
+    if st.checkbox("Remove Duplicates"):
+        final = final.drop_duplicates()
 
-        grade_col = find_column(columns, ["grade", "result"])
-        score_col = find_column(columns, ["mark", "score", "percentage"])
+    if st.checkbox("Drop Null Rows"):
+        final = final.dropna()
 
-        if grade_col:
-            counts = final[grade_col].value_counts().reset_index()
-            counts.columns = ["Grade", "Count"]
+    if st.checkbox("Normalize Numeric Columns"):
+        scaler = MinMaxScaler()
+        num_cols = final.select_dtypes(include=["number"]).columns
+        final[num_cols] = scaler.fit_transform(final[num_cols])
 
-            fig = px.pie(counts, values="Count", names="Grade",
-                         title="Student Grade Distribution")
-            st.plotly_chart(fig, use_container_width=True)
+    # =========================
+    # KPI SECTION
+    # =========================
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Rows", final.shape[0])
+    col2.metric("Columns", final.shape[1])
+    col3.metric("Missing Values", final.isnull().sum().sum())
 
-            st.write("This pie chart shows the percentage of students in each grade category, helping evaluate overall academic performance.")
+    # =========================
+    # DATA SUMMARY (Instead of Visuals)
+    # =========================
+    st.subheader("📑 Dataset Summary")
 
-        elif score_col:
-            avg_scores = final.groupby(join_column)[score_col].mean().reset_index()
+    st.write("### Numerical Summary")
+    st.dataframe(final.describe())
 
-            fig = px.pie(avg_scores,
-                         values=score_col,
-                         names=join_column,
-                         title="Average Score Distribution Among Students")
-            st.plotly_chart(fig, use_container_width=True)
+    st.write("### Preview of Data")
+    st.dataframe(final.head())
 
-            st.write("This pie chart represents each student's contribution to the overall average score.")
+    # =========================
+    # EXPORT
+    # =========================
+    st.subheader("⬇ Export Data")
 
-        else:
-            st.warning("No score or grade related column detected.")
+    st.download_button(
+        "Download CSV",
+        final.to_csv(index=False),
+        "final_dataset.csv"
+    )
 
-    # ======================================================
-    # HEALTHCARE
-    # ======================================================
-    elif domain == "Healthcare Management":
+    buffer = io.BytesIO()
+    final.to_excel(buffer, index=False)
 
-        status_col = find_column(columns, ["status", "recovered", "disease", "outcome"])
+    st.download_button(
+        "Download Excel",
+        buffer.getvalue(),
+        "final_dataset.xlsx"
+    )
 
-        if status_col:
-            counts = final[status_col].value_counts().reset_index()
-            counts.columns = ["Status", "Count"]
-
-            fig = px.pie(counts, values="Count", names="Status",
-                         title="Patient Health Status Distribution")
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.write("This pie chart shows the proportion of patients who are recovered, diseased, or deceased.")
-
-        else:
-            st.warning("No patient status column detected.")
-
-    # ======================================================
-    # BANKING
-    # ======================================================
-    elif domain == "Banking & Finance":
-
-        type_col = find_column(columns, ["type", "transaction"])
-        if type_col:
-            counts = final[type_col].value_counts().reset_index()
-            counts.columns = ["Transaction Type", "Count"]
-
-            fig = px.pie(counts, values="Count", names="Transaction Type",
-                         title="Transaction Type Distribution")
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.write("This pie chart shows the distribution of different transaction types such as deposits and withdrawals.")
-        else:
-            st.warning("No transaction type column detected.")
-
-    # ======================================================
-    # E-COMMERCE
-    # ======================================================
-    elif domain == "E-Commerce & Retail":
-
-        category_col = find_column(columns, ["category", "product"])
-        if category_col:
-            counts = final[category_col].value_counts().reset_index()
-            counts.columns = ["Category", "Count"]
-
-            fig = px.pie(counts, values="Count", names="Category",
-                         title="Product Category Distribution")
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.write("This pie chart shows the distribution of products across different categories.")
-        else:
-            st.warning("No product category column detected.")
-
-    # ======================================================
-    # HR
-    # ======================================================
-    elif domain == "HR Management":
-
-        dept_col = find_column(columns, ["department"])
-        if dept_col:
-            counts = final[dept_col].value_counts().reset_index()
-            counts.columns = ["Department", "Employees"]
-
-            fig = px.pie(counts, values="Employees", names="Department",
-                         title="Employee Distribution by Department")
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.write("This pie chart shows how employees are distributed across departments.")
-        else:
-            st.warning("No department column detected.")
-
-    # ======================================================
-    # OTHERS (Simple Fallback)
-    # ======================================================
-    else:
-        cat_cols = final.select_dtypes(include="object").columns
-        if len(cat_cols) > 0:
-            col = cat_cols[0]
-            counts = final[col].value_counts().reset_index()
-            counts.columns = ["Category", "Count"]
-
-            fig = px.pie(counts, values="Count", names="Category",
-                         title=f"{col.title()} Distribution")
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.write(f"This pie chart shows the distribution of different {col} categories.")
-        else:
-            st.warning("No categorical column found for visualization.")
+else:
+    st.info("Upload at least 2 related datasets to begin.")
