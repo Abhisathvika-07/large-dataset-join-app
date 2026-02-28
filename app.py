@@ -22,7 +22,7 @@ if "final_df" not in st.session_state:
     st.session_state.final_df = None
 
 # =========================
-# DOMAIN SELECTION
+# DOMAIN LIST
 # =========================
 domains = [
     "Education Analytics",
@@ -60,9 +60,10 @@ def load_file(file):
         return pd.read_json(file)
 
 # =========================
-# MERGING
+# MERGE
 # =========================
 if uploaded_files and len(uploaded_files) >= 2:
+
     df_list = [load_file(f) for f in uploaded_files]
     df_list = [df.rename(columns=lambda x: x.strip().lower()) for df in df_list]
 
@@ -82,7 +83,7 @@ if uploaded_files and len(uploaded_files) >= 2:
             st.session_state.final_df = final
             st.success("Datasets merged successfully!")
     else:
-        st.error("No common columns found to merge.")
+        st.error("No common columns found.")
 
 # =========================
 # AFTER MERGE
@@ -90,6 +91,7 @@ if uploaded_files and len(uploaded_files) >= 2:
 if st.session_state.final_df is not None:
 
     final = st.session_state.final_df
+    final.columns = final.columns.str.lower()
     columns = final.columns
 
     st.subheader("🧹 Data Cleaning")
@@ -113,159 +115,138 @@ if st.session_state.final_df is not None:
 
     st.subheader("📊 Domain Based Visual Analytics")
 
-    # ==========================================================
+    # -------- SMART COLUMN FINDER --------
+    def find_column(keywords):
+        for col in columns:
+            for key in keywords:
+                if key in col:
+                    return col
+        return None
+
+    # =========================
     # EDUCATION
-    # ==========================================================
+    # =========================
     if domain == "Education Analytics":
-        if "marks" in columns:
-            st.metric("Average Marks", round(final["marks"].mean(), 2))
+        value_col = find_column(["mark", "score"])
+        category_col = find_column(["student", "name"])
+        pie_col = find_column(["grade"])
 
-            fig_bar = px.bar(final, x="student" if "student" in columns else final.index,
-                             y="marks", title="Student Marks")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-            fig_line = px.line(final, y="marks", markers=True,
-                               title="Marks Trend")
-            st.plotly_chart(fig_line, use_container_width=True)
-
-            if "grade" in columns:
-                grade_counts = final["grade"].value_counts().reset_index()
-                grade_counts.columns = ["Grade", "Count"]
-                fig_pie = px.pie(grade_counts, values="Count",
-                                 names="Grade",
-                                 title="Grade Distribution")
-                st.plotly_chart(fig_pie, use_container_width=True)
-
-    # ==========================================================
+    # =========================
     # HEALTHCARE
-    # ==========================================================
+    # =========================
     elif domain == "Healthcare Management":
-        if "hospital" in columns:
-            hospital_counts = final["hospital"].value_counts().reset_index()
-            hospital_counts.columns = ["Hospital", "Patients"]
+        value_col = find_column(["cost", "bill", "charge"])
+        category_col = find_column(["hospital", "patient"])
+        pie_col = find_column(["disease"])
 
-            fig_bar = px.bar(hospital_counts, x="Hospital", y="Patients",
-                             title="Patients per Hospital")
-            st.plotly_chart(fig_bar, use_container_width=True)
+    # =========================
+    # E-COMMERCE
+    # =========================
+    elif domain == "E-Commerce & Retail":
+        value_col = find_column(["price", "amount", "sales"])
+        category_col = find_column(["product"])
+        pie_col = find_column(["category"])
 
-        if "disease" in columns:
-            disease_counts = final["disease"].value_counts().reset_index()
-            disease_counts.columns = ["Disease", "Count"]
+    # =========================
+    # BANKING
+    # =========================
+    elif domain == "Banking & Finance":
+        value_col = find_column(["amount", "transaction"])
+        category_col = find_column(["account"])
+        pie_col = find_column(["type"])
 
-            fig_pie = px.pie(disease_counts, values="Count",
-                             names="Disease",
-                             title="Disease Distribution")
+    # =========================
+    # HR
+    # =========================
+    elif domain == "HR Management":
+        value_col = find_column(["salary"])
+        category_col = find_column(["department"])
+        pie_col = find_column(["role"])
+
+    # =========================
+    # SUPPLY CHAIN
+    # =========================
+    elif domain == "Supply Chain":
+        value_col = find_column(["shipment", "quantity"])
+        category_col = find_column(["supplier"])
+        pie_col = find_column(["status"])
+
+    # =========================
+    # TELECOM
+    # =========================
+    elif domain == "Telecommunications":
+        value_col = find_column(["call", "usage"])
+        category_col = find_column(["subscriber"])
+        pie_col = find_column(["plan"])
+
+    # =========================
+    # REAL ESTATE
+    # =========================
+    elif domain == "Real Estate":
+        value_col = find_column(["price", "rent"])
+        category_col = find_column(["property"])
+        pie_col = find_column(["type"])
+
+    # =========================
+    # SOCIAL MEDIA
+    # =========================
+    elif domain == "Social Media Analytics":
+        value_col = find_column(["engagement", "likes"])
+        category_col = find_column(["user"])
+        pie_col = find_column(["post"])
+
+    # =========================
+    # MANUFACTURING
+    # =========================
+    elif domain == "Manufacturing":
+        value_col = find_column(["production", "output"])
+        category_col = find_column(["machine"])
+        pie_col = find_column(["shift"])
+
+    # =========================
+    # GENERATE VISUALS
+    # =========================
+    if value_col:
+
+        st.metric("Average Value", round(final[value_col].mean(), 2))
+
+        # BAR
+        fig_bar = px.bar(final,
+                         x=category_col if category_col else final.index,
+                         y=value_col,
+                         title=f"{value_col} by {category_col if category_col else 'Index'}")
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+        # LINE
+        fig_line = px.line(final,
+                           y=value_col,
+                           markers=True,
+                           title=f"{value_col} Trend")
+        st.plotly_chart(fig_line, use_container_width=True)
+
+        # PIE
+        if pie_col:
+            pie_counts = final[pie_col].value_counts().reset_index()
+            pie_counts.columns = ["Category", "Count"]
+
+            fig_pie = px.pie(pie_counts,
+                             values="Count",
+                             names="Category",
+                             title=f"{pie_col} Distribution")
             st.plotly_chart(fig_pie, use_container_width=True)
 
-    # ==========================================================
-    # E-COMMERCE
-    # ==========================================================
-    elif domain == "E-Commerce & Retail":
-        if "product" in columns:
-            product_counts = final["product"].value_counts().reset_index()
-            product_counts.columns = ["Product", "Orders"]
+    else:
+        st.warning("No domain-relevant numeric column found. Showing fallback charts.")
 
-            fig_bar = px.bar(product_counts, x="Product", y="Orders",
-                             title="Orders per Product")
+        numeric_cols = final.select_dtypes(include=["number"]).columns
+        if len(numeric_cols) > 0:
+            fallback = numeric_cols[0]
+
+            fig_bar = px.bar(final, y=fallback)
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        if "price" in columns:
-            fig_line = px.line(final, y="price", title="Price Trend")
+            fig_line = px.line(final, y=fallback)
             st.plotly_chart(fig_line, use_container_width=True)
-
-    # ==========================================================
-    # BANKING
-    # ==========================================================
-    elif domain == "Banking & Finance":
-        if "account" in columns:
-            acc_counts = final["account"].value_counts().reset_index()
-            acc_counts.columns = ["Account", "Transactions"]
-
-            fig_bar = px.bar(acc_counts, x="Account", y="Transactions",
-                             title="Transactions per Account")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-        if "amount" in columns:
-            fig_line = px.line(final, y="amount",
-                               title="Transaction Amount Trend")
-            st.plotly_chart(fig_line, use_container_width=True)
-
-    # ==========================================================
-    # HR
-    # ==========================================================
-    elif domain == "HR Management":
-        if "department" in columns:
-            dept_counts = final["department"].value_counts().reset_index()
-            dept_counts.columns = ["Department", "Employees"]
-
-            fig_bar = px.bar(dept_counts, x="Department", y="Employees",
-                             title="Employees per Department")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-        if "salary" in columns:
-            fig_line = px.line(final, y="salary",
-                               title="Salary Trend")
-            st.plotly_chart(fig_line, use_container_width=True)
-
-    # ==========================================================
-    # SUPPLY CHAIN
-    # ==========================================================
-    elif domain == "Supply Chain":
-        if "supplier" in columns:
-            sup_counts = final["supplier"].value_counts().reset_index()
-            sup_counts.columns = ["Supplier", "Shipments"]
-
-            fig_bar = px.bar(sup_counts, x="Supplier", y="Shipments",
-                             title="Shipments per Supplier")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-    # ==========================================================
-    # TELECOM
-    # ==========================================================
-    elif domain == "Telecommunications":
-        if "subscriber" in columns:
-            sub_counts = final["subscriber"].value_counts().reset_index()
-            sub_counts.columns = ["Subscriber", "Count"]
-
-            fig_bar = px.bar(sub_counts, x="Subscriber", y="Count",
-                             title="Subscribers")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-    # ==========================================================
-    # REAL ESTATE
-    # ==========================================================
-    elif domain == "Real Estate":
-        if "property" in columns:
-            prop_counts = final["property"].value_counts().reset_index()
-            prop_counts.columns = ["Property", "Count"]
-
-            fig_bar = px.bar(prop_counts, x="Property", y="Count",
-                             title="Property Listings")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-    # ==========================================================
-    # SOCIAL MEDIA
-    # ==========================================================
-    elif domain == "Social Media Analytics":
-        if "post" in columns:
-            post_counts = final["post"].value_counts().reset_index()
-            post_counts.columns = ["Post", "Count"]
-
-            fig_bar = px.bar(post_counts, x="Post", y="Count",
-                             title="Post Engagement")
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-    # ==========================================================
-    # MANUFACTURING
-    # ==========================================================
-    elif domain == "Manufacturing":
-        if "machine" in columns:
-            mach_counts = final["machine"].value_counts().reset_index()
-            mach_counts.columns = ["Machine", "Production"]
-
-            fig_bar = px.bar(mach_counts, x="Machine", y="Production",
-                             title="Production per Machine")
-            st.plotly_chart(fig_bar, use_container_width=True)
 
 else:
-    st.info("Upload at least 2 related files to begin analysis.")
+    st.info("Upload at least 2 related datasets to begin.")
