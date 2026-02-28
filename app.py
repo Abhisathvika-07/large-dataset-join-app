@@ -10,26 +10,16 @@ import io
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
 
-# ---------------- DARK NAVY THEME ----------------
+# ---------------- THEME ----------------
 st.markdown("""
 <style>
-.stApp {
-    background-color: #0f1c2e;
-}
-section[data-testid="stSidebar"] {
-    background-color: #0b1625;
-}
-h1, h2, h3, h4, label {
-    color: #ffffff !important;
-}
+.stApp { background-color: #0f1c2e; }
+section[data-testid="stSidebar"] { background-color: #0b1625; }
+h1, h2, h3, h4, label { color: white !important; }
 .stButton>button {
     background-color: #1f3c88;
     color: white;
     border-radius: 8px;
-    padding: 6px 14px;
-}
-.stSelectbox, .stTextInput {
-    border-radius: 8px !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -45,9 +35,8 @@ if "page" not in st.session_state:
     st.session_state.page = "login"
 
 # =========================
-# AUTH PAGES
+# LOGIN
 # =========================
-
 def login_page():
     st.title("🔐 Login")
 
@@ -79,7 +68,6 @@ def login_page():
 
 def create_account():
     st.title("🆕 Create Account")
-
     new_user = st.text_input("New Username")
     new_pass = st.text_input("New Password", type="password")
 
@@ -107,14 +95,6 @@ if not st.session_state.logged_in:
 
 st.title("📊 Multi-Dataset Fusion Dashboard")
 
-# -------- LOGOUT BUTTON --------
-col_top = st.columns([9,1])
-with col_top[1]:
-    if st.button("🚪 Logout"):
-        st.session_state.logged_in = False
-        st.session_state.page = "login"
-        st.rerun()
-
 # -------- SIDEBAR --------
 st.sidebar.title("📁 Upload Datasets")
 
@@ -124,29 +104,28 @@ if st.sidebar.button("🚪 Logout", use_container_width=True):
     st.rerun()
 
 # -------- DOMAINS --------
-domains = [
-    "Education Analytics",
-    "Healthcare Management",
-    "E-Commerce & Retail",
-    "Banking & Finance",
-    "HR Management",
-    "Supply Chain",
-    "Telecommunications",
-    "Real Estate",
-    "Social Media Analytics",
-    "Manufacturing"
-]
+domains = {
+    "Education Analytics": ["student", "marks", "roll"],
+    "Healthcare Management": ["patient", "medical", "hospital"],
+    "E-Commerce & Retail": ["order", "product", "customer"],
+    "Banking & Finance": ["account", "transaction", "customer"],
+    "HR Management": ["employee", "salary", "department"],
+    "Supply Chain": ["shipment", "supplier", "inventory"],
+    "Telecommunications": ["subscriber", "call", "network"],
+    "Real Estate": ["property", "buyer", "price"],
+    "Social Media Analytics": ["user", "post", "engagement"],
+    "Manufacturing": ["machine", "batch", "production"]
+}
 
-domain = st.selectbox("📂 Select Business Domain", domains)
+domain = st.selectbox("📂 Select Business Domain", list(domains.keys()))
 
-# -------- FILE UPLOAD --------
+# -------- DRAG & DROP FILE UPLOAD --------
 uploaded_files = st.sidebar.file_uploader(
-    "Upload Files (CSV, Excel, JSON)",
+    "📤 Drag & Drop files here or Click to Browse",
     type=["csv", "xlsx", "json"],
     accept_multiple_files=True
 )
 
-# -------- FILE LOADER --------
 @st.cache_data
 def load_file(file):
     if file.name.endswith(".csv"):
@@ -163,7 +142,15 @@ def load_file(file):
 if uploaded_files and len(uploaded_files) >= 2:
 
     df_list = [load_file(f) for f in uploaded_files]
-    df_list = [df.rename(columns=lambda x: x.strip()) for df in df_list]
+    df_list = [df.rename(columns=lambda x: x.strip().lower()) for df in df_list]
+
+    # -------- DOMAIN VALIDATION --------
+    expected_keywords = domains[domain]
+    all_columns = " ".join(df_list[0].columns)
+
+    if not any(keyword in all_columns for keyword in expected_keywords):
+        st.error(f"❌ Uploaded datasets do not match selected domain: {domain}")
+        st.stop()
 
     # -------- AUTO DETECT COMMON COLUMNS --------
     common_cols = set(df_list[0].columns)
@@ -171,41 +158,10 @@ if uploaded_files and len(uploaded_files) >= 2:
         common_cols = common_cols.intersection(set(df.columns))
 
     if not common_cols:
-        st.error("❌ No common columns found.")
+        st.error("❌ No common join columns detected.")
         st.stop()
 
-    # -------- DOMAIN SMART SUGGESTION --------
-    domain_key_map = {
-        "Education Analytics": ["student_id", "roll_no"],
-        "Healthcare Management": ["patient_id"],
-        "E-Commerce & Retail": ["order_id", "customer_id"],
-        "Banking & Finance": ["account_id", "customer_id"],
-        "HR Management": ["employee_id"],
-        "Supply Chain": ["shipment_id", "supplier_id"],
-        "Telecommunications": ["subscriber_id", "customer_id"],
-        "Real Estate": ["property_id"],
-        "Social Media Analytics": ["user_id"],
-        "Manufacturing": ["machine_id", "product_id"]
-    }
-
-    suggested = None
-    for key in domain_key_map.get(domain, []):
-        if key in common_cols:
-            suggested = key
-            break
-
-    st.subheader("🔎 Join Column Selection")
-
-    if suggested:
-        st.success(f"Suggested: {suggested}")
-        join_column = st.selectbox(
-            "Select Join Column",
-            list(common_cols),
-            index=list(common_cols).index(suggested)
-        )
-    else:
-        join_column = st.selectbox("Select Join Column", list(common_cols))
-
+    join_column = st.selectbox("🔎 Select Join Column", list(common_cols))
     join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
     if st.button("🚀 Merge Datasets"):
@@ -245,7 +201,7 @@ if "final_df" in st.session_state:
     col2.metric("Columns", final.shape[1])
     col3.metric("Missing Values", final.isnull().sum().sum())
 
-    # -------- CHARTS --------
+    # -------- VISUALS --------
     st.subheader("📈 Visual Analytics")
 
     numeric_cols = final.select_dtypes(include=np.number).columns
@@ -311,4 +267,3 @@ if "final_df" in st.session_state:
 
 else:
     st.info("Upload at least 2 files and merge to begin analysis.")
-
