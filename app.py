@@ -229,6 +229,7 @@ if st.session_state.final_df is not None:
 
 
 # -------- VISUALIZATION --------
+# -------- VISUALIZATION --------
 st.subheader("📊 Visual Analytics")
 
 if st.session_state.final_df is not None:
@@ -239,7 +240,7 @@ if st.session_state.final_df is not None:
 
     if len(numeric_cols) > 0:
 
-        selected = st.selectbox("Select Numeric Column", numeric_cols)
+        selected = st.selectbox("Select Numeric Column", numeric_cols, key="num_select")
 
         # LINE CHART
         fig_line = px.line(
@@ -248,8 +249,18 @@ if st.session_state.final_df is not None:
             title=f"{selected} Trend Over Records",
             markers=True
         )
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
 
+        # PIE CHART
+        top_data = final.sort_values(by=selected, ascending=False).head(5)
+
+        fig_pie = px.pie(
+            top_data,
+            values=selected,
+            names=top_data.index,
+            title=f"Top 5 Distribution of {selected}"
+        )
+        st.plotly_chart(fig_pie, use_container_width=True, key="pie_chart")
         # PIE CHART (Top 5)
         top_data = final.sort_values(by=selected, ascending=False).head(5)
 
@@ -303,6 +314,7 @@ if st.session_state.final_df is not None:
 
 else:
     st.info("Upload at least 2 related files to begin analysis.")
+
 
 
 
