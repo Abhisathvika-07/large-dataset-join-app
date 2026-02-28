@@ -175,27 +175,7 @@ if "final_df" in st.session_state:
         st.dataframe(final.sort_values(metric_col).head())
 
    
-   # ---------------- COLUMN SEARCH (Improved) ----------------
-st.subheader("🔍 Column Search")
-
-search_term = st.text_input("Search Column Name")
-
-if search_term:
-    matching = [col for col in final.columns 
-                if search_term.lower() in col.lower()]
-
-    if matching:
-        st.success(f"Found {len(matching)} matching column(s):")
-
-        for col in matching:
-            st.write(f"✔ {col}")
-
-            # Show preview of that column
-            st.write(final[[col]].head())
-
-    else:
-        st.error("❌ No matching columns found.")
-
+  
     # ---------------- DATA PREVIEW ----------------
     st.subheader("📑 Full Data Preview")
     st.dataframe(final.head())
@@ -211,4 +191,5 @@ if search_term:
 
 else:
     st.info("Upload at least 2 related datasets to begin.")
+
 
