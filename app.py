@@ -10,16 +10,23 @@ import io
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
 
-# ---------------- THEME ----------------
+# ---------------- DARK THEME ----------------
 st.markdown("""
 <style>
-.stApp { background-color: #0f1c2e; }
-section[data-testid="stSidebar"] { background-color: #0b1625; }
-h1, h2, h3, h4, label { color: white !important; }
+.stApp {
+    background-color: #0f1c2e;
+}
+section[data-testid="stSidebar"] {
+    background-color: #0b1625;
+}
+h1, h2, h3, h4, label {
+    color: #ffffff !important;
+}
 .stButton>button {
     background-color: #1f3c88;
     color: white;
     border-radius: 8px;
+    padding: 6px 14px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -34,9 +41,14 @@ if "users" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
+if "final_df" not in st.session_state:
+    st.session_state.final_df = None
+
+
 # =========================
-# LOGIN
+# AUTH SYSTEM
 # =========================
+
 def login_page():
     st.title("🔐 Login")
 
@@ -68,6 +80,7 @@ def login_page():
 
 def create_account():
     st.title("🆕 Create Account")
+
     new_user = st.text_input("New Username")
     new_pass = st.text_input("New Password", type="password")
 
@@ -89,6 +102,7 @@ if not st.session_state.logged_in:
         login_page()
     st.stop()
 
+
 # =========================
 # DASHBOARD
 # =========================
@@ -101,31 +115,33 @@ st.sidebar.title("📁 Upload Datasets")
 if st.sidebar.button("🚪 Logout", use_container_width=True):
     st.session_state.logged_in = False
     st.session_state.page = "login"
+    st.session_state.final_df = None
     st.rerun()
 
-# -------- DOMAINS --------
+# -------- DOMAIN KEYWORDS --------
 domains = {
-    "Education Analytics": ["student", "marks", "roll"],
+    "Education Analytics": ["student", "roll", "marks", "grade"],
     "Healthcare Management": ["patient", "medical", "hospital"],
     "E-Commerce & Retail": ["order", "product", "customer"],
     "Banking & Finance": ["account", "transaction", "customer"],
     "HR Management": ["employee", "salary", "department"],
     "Supply Chain": ["shipment", "supplier", "inventory"],
-    "Telecommunications": ["subscriber", "call", "network"],
-    "Real Estate": ["property", "buyer", "price"],
+    "Telecommunications": ["subscriber", "call", "plan"],
+    "Real Estate": ["property", "rent", "buyer"],
     "Social Media Analytics": ["user", "post", "engagement"],
-    "Manufacturing": ["machine", "batch", "production"]
+    "Manufacturing": ["machine", "production", "factory"]
 }
 
 domain = st.selectbox("📂 Select Business Domain", list(domains.keys()))
 
-# -------- DRAG & DROP FILE UPLOAD --------
+# -------- FILE UPLOAD (Drag & Drop enabled by default) --------
 uploaded_files = st.sidebar.file_uploader(
-    "📤 Drag & Drop files here or Click to Browse",
+    "Drag & Drop files here or Click to Browse",
     type=["csv", "xlsx", "json"],
     accept_multiple_files=True
 )
 
+# -------- FILE LOADER --------
 @st.cache_data
 def load_file(file):
     if file.name.endswith(".csv"):
@@ -134,6 +150,7 @@ def load_file(file):
         return pd.read_excel(file)
     elif file.name.endswith(".json"):
         return pd.read_json(file)
+
 
 # =========================
 # PROCESS FILES
@@ -144,35 +161,30 @@ if uploaded_files and len(uploaded_files) >= 2:
     df_list = [load_file(f) for f in uploaded_files]
     df_list = [df.rename(columns=lambda x: x.strip().lower()) for df in df_list]
 
-    # -------- DOMAIN VALIDATION --------
-  # -------- STRICT DOMAIN VALIDATION --------
-expected_keywords = domains[domain]
+    # -------- STRICT DOMAIN VALIDATION --------
+    expected_keywords = domains[domain]
 
-# Combine all column names from all uploaded files
-all_columns = []
-for df in df_list:
-    all_columns.extend(list(df.columns))
+    all_columns = []
+    for df in df_list:
+        all_columns.extend(df.columns.tolist())
 
-all_columns = [col.lower() for col in all_columns]
+    match_count = 0
+    for keyword in expected_keywords:
+        for col in all_columns:
+            if keyword in col:
+                match_count += 1
 
-# Count matching keywords
-match_count = 0
-for keyword in expected_keywords:
-    for col in all_columns:
-        if keyword in col:
-            match_count += 1
+    if match_count < 2:
+        st.error(f"❌ Selected domain '{domain}' does not match uploaded dataset structure.")
+        st.stop()
 
-# Require at least 2 strong matches to allow merge
-if match_count < 2:
-    st.error(f"❌ Selected domain '{domain}' does not match uploaded dataset structure.")
-    st.stop()
-    # -------- AUTO DETECT COMMON COLUMNS --------
+    # -------- COMMON COLUMNS --------
     common_cols = set(df_list[0].columns)
     for df in df_list[1:]:
-        common_cols = common_cols.intersection(set(df.columns))
+        common_cols = common_cols.intersection(df.columns)
 
     if not common_cols:
-        st.error("❌ No common join columns detected.")
+        st.error("❌ No common columns found to merge.")
         st.stop()
 
     join_column = st.selectbox("🔎 Select Join Column", list(common_cols))
@@ -184,18 +196,18 @@ if match_count < 2:
         for df in df_list[1:]:
             final = final.merge(df, on=join_column, how=join_type)
 
-        st.session_state["final_df"] = final
+        st.session_state.final_df = final
         st.success("Datasets merged successfully!")
+
 
 # =========================
 # AFTER MERGE
 # =========================
 
-if "final_df" in st.session_state:
+if st.session_state.final_df is not None:
 
-    final = st.session_state["final_df"]
+    final = st.session_state.final_df
 
-    # -------- CLEANING --------
     st.subheader("🧹 Data Cleaning")
 
     if st.checkbox("Remove Duplicates"):
@@ -215,7 +227,7 @@ if "final_df" in st.session_state:
     col2.metric("Columns", final.shape[1])
     col3.metric("Missing Values", final.isnull().sum().sum())
 
-    # -------- VISUALS --------
+    # -------- VISUALIZATION --------
     st.subheader("📈 Visual Analytics")
 
     numeric_cols = final.select_dtypes(include=np.number).columns
@@ -223,13 +235,8 @@ if "final_df" in st.session_state:
     if len(numeric_cols) > 0:
         selected = st.selectbox("Select Numeric Column", numeric_cols)
 
-        colA, colB = st.columns(2)
-
         fig_bar = px.bar(final[selected].value_counts().head(10))
-        colA.plotly_chart(fig_bar, use_container_width=True)
-
-        fig_pie = px.pie(final, names=selected)
-        colB.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
         fig_line = px.line(final[selected])
         st.plotly_chart(fig_line, use_container_width=True)
@@ -259,27 +266,15 @@ if "final_df" in st.session_state:
     # -------- EXPORT --------
     st.subheader("⬇ Export Data")
 
-    st.download_button(
-        "Download CSV",
-        final.to_csv(index=False),
-        "final_dataset.csv"
-    )
+    st.download_button("Download CSV",
+                       final.to_csv(index=False),
+                       "final_dataset.csv")
 
     buffer = io.BytesIO()
     final.to_excel(buffer, index=False)
-    st.download_button(
-        "Download Excel",
-        buffer.getvalue(),
-        "final_dataset.xlsx"
-    )
-
-    st.download_button(
-        "Download JSON",
-        final.to_json(),
-        "final_dataset.json"
-    )
+    st.download_button("Download Excel",
+                       buffer.getvalue(),
+                       "final_dataset.xlsx")
 
 else:
-    st.info("Upload at least 2 files and merge to begin analysis.")
-
-
+    st.info("Upload at least 2 related files to begin analysis.")
