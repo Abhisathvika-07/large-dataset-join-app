@@ -1,10 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
+import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.linear_model import LinearRegression
-from sklearn.cluster import KMeans
 import io
 
 # ---------------- PAGE CONFIG ----------------
@@ -13,135 +11,45 @@ st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
 # ---------------- DARK THEME ----------------
 st.markdown("""
 <style>
-.stApp {
-    background-color: #0f1c2e;
-}
-section[data-testid="stSidebar"] {
-    background-color: #0b1625;
-}
-h1, h2, h3, h4, label {
-    color: #ffffff !important;
-}
-.stButton>button {
-    background-color: #1f3c88;
-    color: white;
-    border-radius: 8px;
-    padding: 6px 14px;
-}
+.stApp { background-color: #0f1c2e; }
+section[data-testid="stSidebar"] { background-color: #0b1625; }
+h1, h2, h3, h4, label { color: white !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SESSION STATE ----------------
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-if "users" not in st.session_state:
-    st.session_state.users = {"admin": "admin123"}
-
-if "page" not in st.session_state:
-    st.session_state.page = "login"
-
+# ---------------- SESSION ----------------
 if "final_df" not in st.session_state:
     st.session_state.final_df = None
 
-
 # =========================
-# AUTH SYSTEM
+# DOMAIN SELECTION
 # =========================
-
-def login_page():
-    st.title("🔐 Login")
-
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if st.button("Login"):
-        if username in st.session_state.users and st.session_state.users[username] == password:
-            st.session_state.logged_in = True
-            st.session_state.page = "dashboard"
-            st.rerun()
-        else:
-            st.error("Invalid credentials")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("Create Account"):
-            st.session_state.page = "create"
-            st.rerun()
-
-    with col2:
-        if st.button("Forgot Password"):
-            if username in st.session_state.users:
-                st.info(f"Password: {st.session_state.users[username]}")
-            else:
-                st.warning("Enter valid username")
-
-
-def create_account():
-    st.title("🆕 Create Account")
-
-    new_user = st.text_input("New Username")
-    new_pass = st.text_input("New Password", type="password")
-
-    if st.button("Register"):
-        if new_user in st.session_state.users:
-            st.warning("User already exists")
-        else:
-            st.session_state.users[new_user] = new_pass
-            st.success("Account created. Please login.")
-            st.session_state.page = "login"
-            st.rerun()
-
-
-# ---------------- AUTH ROUTING ----------------
-if not st.session_state.logged_in:
-    if st.session_state.page == "create":
-        create_account()
-    else:
-        login_page()
-    st.stop()
-
-
-# =========================
-# DASHBOARD
-# =========================
+domains = [
+    "Education Analytics",
+    "Healthcare Management",
+    "E-Commerce & Retail",
+    "Banking & Finance",
+    "HR Management",
+    "Supply Chain",
+    "Telecommunications",
+    "Real Estate",
+    "Social Media Analytics",
+    "Manufacturing"
+]
 
 st.title("📊 Multi-Dataset Fusion Dashboard")
 
-# -------- SIDEBAR --------
-st.sidebar.title("📁 Upload Datasets")
+domain = st.selectbox("📂 Select Business Domain", domains)
 
-if st.sidebar.button("🚪 Logout", use_container_width=True):
-    st.session_state.logged_in = False
-    st.session_state.page = "login"
-    st.session_state.final_df = None
-    st.rerun()
-
-# -------- DOMAIN KEYWORDS --------
-domains = {
-    "Education Analytics": ["student", "roll", "marks", "grade"],
-    "Healthcare Management": ["patient", "medical", "hospital"],
-    "E-Commerce & Retail": ["order", "product", "customer"],
-    "Banking & Finance": ["account", "transaction", "customer"],
-    "HR Management": ["employee", "salary", "department"],
-    "Supply Chain": ["shipment", "supplier", "inventory"],
-    "Telecommunications": ["subscriber", "call", "plan"],
-    "Real Estate": ["property", "rent", "buyer"],
-    "Social Media Analytics": ["user", "post", "engagement"],
-    "Manufacturing": ["machine", "production", "factory"]
-}
-
-domain = st.selectbox("📂 Select Business Domain", list(domains.keys()))
-
-# -------- FILE UPLOAD (Drag & Drop enabled by default) --------
+# =========================
+# FILE UPLOAD
+# =========================
 uploaded_files = st.sidebar.file_uploader(
-    "Drag & Drop files here or Click to Browse",
+    "Upload at least 2 related datasets",
     type=["csv", "xlsx", "json"],
     accept_multiple_files=True
 )
 
-# -------- FILE LOADER --------
 @st.cache_data
 def load_file(file):
     if file.name.endswith(".csv"):
@@ -151,62 +59,38 @@ def load_file(file):
     elif file.name.endswith(".json"):
         return pd.read_json(file)
 
-
 # =========================
-# PROCESS FILES
+# MERGING
 # =========================
-
 if uploaded_files and len(uploaded_files) >= 2:
-
     df_list = [load_file(f) for f in uploaded_files]
     df_list = [df.rename(columns=lambda x: x.strip().lower()) for df in df_list]
 
-    # -------- STRICT DOMAIN VALIDATION --------
-    expected_keywords = domains[domain]
-
-    all_columns = []
-    for df in df_list:
-        all_columns.extend(df.columns.tolist())
-
-    match_count = 0
-    for keyword in expected_keywords:
-        for col in all_columns:
-            if keyword in col:
-                match_count += 1
-
-    if match_count < 2:
-        st.error(f"❌ Selected domain '{domain}' does not match uploaded dataset structure.")
-        st.stop()
-
-    # -------- COMMON COLUMNS --------
     common_cols = set(df_list[0].columns)
     for df in df_list[1:]:
-        common_cols = common_cols.intersection(df.columns)
+        common_cols &= set(df.columns)
 
-    if not common_cols:
-        st.error("❌ No common columns found to merge.")
-        st.stop()
+    if common_cols:
+        join_column = st.selectbox("Select Join Column", list(common_cols))
+        join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
-    join_column = st.selectbox("🔎 Select Join Column", list(common_cols))
-    join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
+        if st.button("Merge Datasets"):
+            final = df_list[0]
+            for df in df_list[1:]:
+                final = final.merge(df, on=join_column, how=join_type)
 
-    if st.button("🚀 Merge Datasets"):
-
-        final = df_list[0]
-        for df in df_list[1:]:
-            final = final.merge(df, on=join_column, how=join_type)
-
-        st.session_state.final_df = final
-        st.success("Datasets merged successfully!")
-
+            st.session_state.final_df = final
+            st.success("Datasets merged successfully!")
+    else:
+        st.error("No common columns found to merge.")
 
 # =========================
 # AFTER MERGE
 # =========================
-
 if st.session_state.final_df is not None:
 
     final = st.session_state.final_df
+    columns = final.columns
 
     st.subheader("🧹 Data Cleaning")
 
@@ -218,104 +102,170 @@ if st.session_state.final_df is not None:
 
     if st.checkbox("Normalize Numeric Columns"):
         scaler = MinMaxScaler()
-        num_cols = final.select_dtypes(include=np.number).columns
+        num_cols = final.select_dtypes(include=["number"]).columns
         final[num_cols] = scaler.fit_transform(final[num_cols])
 
-    # -------- KPI --------
+    # KPI
     col1, col2, col3 = st.columns(3)
     col1.metric("Rows", final.shape[0])
     col2.metric("Columns", final.shape[1])
     col3.metric("Missing Values", final.isnull().sum().sum())
 
+    st.subheader("📊 Domain Based Visual Analytics")
 
-# -------- VISUALIZATION --------
-# -------- VISUALIZATION --------
-st.subheader("📊 Visual Analytics")
+    # ==========================================================
+    # EDUCATION
+    # ==========================================================
+    if domain == "Education Analytics":
+        if "marks" in columns:
+            st.metric("Average Marks", round(final["marks"].mean(), 2))
 
-if st.session_state.final_df is not None:
+            fig_bar = px.bar(final, x="student" if "student" in columns else final.index,
+                             y="marks", title="Student Marks")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-    final = st.session_state.final_df
+            fig_line = px.line(final, y="marks", markers=True,
+                               title="Marks Trend")
+            st.plotly_chart(fig_line, use_container_width=True)
 
-    numeric_cols = final.select_dtypes(include=["number"]).columns
+            if "grade" in columns:
+                grade_counts = final["grade"].value_counts().reset_index()
+                grade_counts.columns = ["Grade", "Count"]
+                fig_pie = px.pie(grade_counts, values="Count",
+                                 names="Grade",
+                                 title="Grade Distribution")
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-    if len(numeric_cols) > 0:
+    # ==========================================================
+    # HEALTHCARE
+    # ==========================================================
+    elif domain == "Healthcare Management":
+        if "hospital" in columns:
+            hospital_counts = final["hospital"].value_counts().reset_index()
+            hospital_counts.columns = ["Hospital", "Patients"]
 
-        selected = st.selectbox("Select Numeric Column", numeric_cols, key="num_select")
+            fig_bar = px.bar(hospital_counts, x="Hospital", y="Patients",
+                             title="Patients per Hospital")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-        # LINE CHART
-        fig_line = px.line(
-            final,
-            y=selected,
-            title=f"{selected} Trend Over Records",
-            markers=True
-        )
-        st.plotly_chart(fig_line, use_container_width=True, key="line_chart")
+        if "disease" in columns:
+            disease_counts = final["disease"].value_counts().reset_index()
+            disease_counts.columns = ["Disease", "Count"]
 
-        # PIE CHART
-        top_data = final.sort_values(by=selected, ascending=False).head(5)
+            fig_pie = px.pie(disease_counts, values="Count",
+                             names="Disease",
+                             title="Disease Distribution")
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-        fig_pie = px.pie(
-            top_data,
-            values=selected,
-            names=top_data.index,
-            title=f"Top 5 Distribution of {selected}"
-        )
-        st.plotly_chart(fig_pie, use_container_width=True, key="pie_chart")
-        # PIE CHART (Top 5)
-        top_data = final.sort_values(by=selected, ascending=False).head(5)
+    # ==========================================================
+    # E-COMMERCE
+    # ==========================================================
+    elif domain == "E-Commerce & Retail":
+        if "product" in columns:
+            product_counts = final["product"].value_counts().reset_index()
+            product_counts.columns = ["Product", "Orders"]
 
-        fig_pie = px.pie(
-            top_data,
-            values=selected,
-            names=top_data.index,
-            title=f"Top 5 Distribution of {selected}"
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-    # -------- PIE CHART (Top 5 Values) --------
-    top_data = final.sort_values(by=selected, ascending=False).head(5)
+            fig_bar = px.bar(product_counts, x="Product", y="Orders",
+                             title="Orders per Product")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-    fig_pie = px.pie(
-        top_data,
-        values=selected,
-        names=top_data.index,
-        title=f"Top 5 Distribution of {selected}"
-    )
-    st.plotly_chart(fig_pie, use_container_width=True)
-    # -------- ML --------
-    st.subheader("🤖 Machine Learning")
+        if "price" in columns:
+            fig_line = px.line(final, y="price", title="Price Trend")
+            st.plotly_chart(fig_line, use_container_width=True)
 
-    if len(numeric_cols) >= 2:
-        target = st.selectbox("Target Column", numeric_cols)
-        features = final[numeric_cols].drop(columns=[target])
+    # ==========================================================
+    # BANKING
+    # ==========================================================
+    elif domain == "Banking & Finance":
+        if "account" in columns:
+            acc_counts = final["account"].value_counts().reset_index()
+            acc_counts.columns = ["Account", "Transactions"]
 
-        if st.button("Run Regression"):
-            model = LinearRegression()
-            model.fit(features, final[target])
-            st.success("Regression Model Trained")
+            fig_bar = px.bar(acc_counts, x="Account", y="Transactions",
+                             title="Transactions per Account")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-        if st.button("Run Clustering"):
-            kmeans = KMeans(n_clusters=3, n_init=10)
-            final["Cluster"] = kmeans.fit_predict(features)
-            st.success("Clustering Completed")
-            st.dataframe(final.head())
+        if "amount" in columns:
+            fig_line = px.line(final, y="amount",
+                               title="Transaction Amount Trend")
+            st.plotly_chart(fig_line, use_container_width=True)
 
-    # -------- EXPORT --------
-    st.subheader("⬇ Export Data")
+    # ==========================================================
+    # HR
+    # ==========================================================
+    elif domain == "HR Management":
+        if "department" in columns:
+            dept_counts = final["department"].value_counts().reset_index()
+            dept_counts.columns = ["Department", "Employees"]
 
-    st.download_button("Download CSV",
-                       final.to_csv(index=False),
-                       "final_dataset.csv")
+            fig_bar = px.bar(dept_counts, x="Department", y="Employees",
+                             title="Employees per Department")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-    buffer = io.BytesIO()
-    final.to_excel(buffer, index=False)
-    st.download_button("Download Excel",
-                       buffer.getvalue(),
-                       "final_dataset.xlsx")
+        if "salary" in columns:
+            fig_line = px.line(final, y="salary",
+                               title="Salary Trend")
+            st.plotly_chart(fig_line, use_container_width=True)
+
+    # ==========================================================
+    # SUPPLY CHAIN
+    # ==========================================================
+    elif domain == "Supply Chain":
+        if "supplier" in columns:
+            sup_counts = final["supplier"].value_counts().reset_index()
+            sup_counts.columns = ["Supplier", "Shipments"]
+
+            fig_bar = px.bar(sup_counts, x="Supplier", y="Shipments",
+                             title="Shipments per Supplier")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ==========================================================
+    # TELECOM
+    # ==========================================================
+    elif domain == "Telecommunications":
+        if "subscriber" in columns:
+            sub_counts = final["subscriber"].value_counts().reset_index()
+            sub_counts.columns = ["Subscriber", "Count"]
+
+            fig_bar = px.bar(sub_counts, x="Subscriber", y="Count",
+                             title="Subscribers")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ==========================================================
+    # REAL ESTATE
+    # ==========================================================
+    elif domain == "Real Estate":
+        if "property" in columns:
+            prop_counts = final["property"].value_counts().reset_index()
+            prop_counts.columns = ["Property", "Count"]
+
+            fig_bar = px.bar(prop_counts, x="Property", y="Count",
+                             title="Property Listings")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ==========================================================
+    # SOCIAL MEDIA
+    # ==========================================================
+    elif domain == "Social Media Analytics":
+        if "post" in columns:
+            post_counts = final["post"].value_counts().reset_index()
+            post_counts.columns = ["Post", "Count"]
+
+            fig_bar = px.bar(post_counts, x="Post", y="Count",
+                             title="Post Engagement")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ==========================================================
+    # MANUFACTURING
+    # ==========================================================
+    elif domain == "Manufacturing":
+        if "machine" in columns:
+            mach_counts = final["machine"].value_counts().reset_index()
+            mach_counts.columns = ["Machine", "Production"]
+
+            fig_bar = px.bar(mach_counts, x="Machine", y="Production",
+                             title="Production per Machine")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
 else:
     st.info("Upload at least 2 related files to begin analysis.")
-
-
-
-
-
