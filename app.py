@@ -1,25 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-import io
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
+st.set_page_config(page_title="Domain Pie Analytics Dashboard", layout="wide")
 
-# ---------------- DARK THEME ----------------
-st.markdown("""
-<style>
-.stApp { background-color: #0f1c2e; }
-section[data-testid="stSidebar"] { background-color: #0b1625; }
-h1, h2, h3, h4, label { color: white !important; }
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------- SESSION ----------------
-if "final_df" not in st.session_state:
-    st.session_state.final_df = None
+st.title("📊 Domain-Based Pie Analytics Dashboard")
 
 # ---------------- DOMAIN LIST ----------------
 domains = [
@@ -34,8 +20,6 @@ domains = [
     "Social Media Analytics",
     "Manufacturing"
 ]
-
-st.title("📊 Multi-Dataset Fusion Dashboard")
 
 domain = st.selectbox("📂 Select Business Domain", domains)
 
@@ -57,6 +41,7 @@ def load_file(file):
 
 # ---------------- MERGE ----------------
 if uploaded_files and len(uploaded_files) >= 2:
+
     df_list = [load_file(f) for f in uploaded_files]
     df_list = [df.rename(columns=lambda x: x.strip().lower()) for df in df_list]
 
@@ -66,108 +51,229 @@ if uploaded_files and len(uploaded_files) >= 2:
 
     if common_cols:
         join_column = st.selectbox("Select Join Column", list(common_cols))
-        join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
         if st.button("Merge Datasets"):
             final = df_list[0]
             for df in df_list[1:]:
-                final = final.merge(df, on=join_column, how=join_type)
+                final = final.merge(df, on=join_column, how="inner")
+
             st.session_state.final_df = final
             st.success("Datasets merged successfully!")
     else:
         st.error("No common columns found.")
 
-# ---------------- AFTER MERGE ----------------
-if st.session_state.final_df is not None:
+# ---------------- PIE VISUALIZATION ----------------
+if "final_df" in st.session_state:
 
     final = st.session_state.final_df
     final.columns = final.columns.str.lower()
 
-    # Remove obvious ID columns
-    final = final[[col for col in final.columns if "id" not in col]]
+    st.subheader("📊 Domain-Based Pie Chart Insight")
 
-    st.subheader("🧹 Data Cleaning")
+    # ---------------- EDUCATION ----------------
+    if domain == "Education Analytics":
 
-    if st.checkbox("Remove Duplicates"):
-        final = final.drop_duplicates()
+        if "grade" in final.columns:
+            grade_counts = final["grade"].value_counts().reset_index()
+            grade_counts.columns = ["Grade", "Count"]
 
-    if st.checkbox("Drop Null Rows"):
-        final = final.dropna()
+            fig = px.pie(grade_counts,
+                         values="Count",
+                         names="Grade",
+                         title="Grade Distribution of Students")
 
-    if st.checkbox("Normalize Numeric Columns"):
-        scaler = MinMaxScaler()
-        num_cols = final.select_dtypes(include=["number"]).columns
-        final[num_cols] = scaler.fit_transform(final[num_cols])
+            st.plotly_chart(fig, use_container_width=True)
 
-    # KPI
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Rows", final.shape[0])
-    col2.metric("Columns", final.shape[1])
-    col3.metric("Missing Values", final.isnull().sum().sum())
+            st.write("This pie chart shows the percentage distribution of grades among students, helping identify overall academic performance levels.")
 
-    st.subheader("📊 Domain Based Visual Analytics")
+        elif "marks" in final.columns:
+            avg_marks = final.groupby("student")["marks"].mean().reset_index()
 
-    numeric_cols = final.select_dtypes(include=["number"]).columns
-    categorical_cols = final.select_dtypes(include=["object"]).columns
+            fig = px.pie(avg_marks,
+                         values="marks",
+                         names="student",
+                         title="Average Marks Distribution Across Students")
 
-    if len(numeric_cols) > 0 and len(categorical_cols) > 0:
+            st.plotly_chart(fig, use_container_width=True)
 
-        value_col = numeric_cols[0]
-        category_col = categorical_cols[0]
+            st.write("This pie chart represents the proportion of total average marks contributed by each student.")
 
-        # ---------------- BAR CHART ----------------
-        fig_bar = px.bar(
-            final,
-            x=category_col,
-            y=value_col,
-            labels={
-                category_col: category_col.replace("_", " ").title(),
-                value_col: value_col.replace("_", " ").title()
-            },
-            title=f"{value_col.replace('_',' ').title()} by {category_col.replace('_',' ').title()}"
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        else:
+            st.warning("No marks or grade column found.")
 
-        st.write(
-            f"This bar chart compares {value_col.replace('_',' ')} across different {category_col.replace('_',' ')} categories, helping identify highest and lowest values."
-        )
+    # ---------------- HEALTHCARE ----------------
+    elif domain == "Healthcare Management":
 
-        # ---------------- LINE CHART ----------------
-        fig_line = px.line(
-            final,
-            x=category_col,
-            y=value_col,
-            markers=True,
-            labels={
-                category_col: category_col.replace("_", " ").title(),
-                value_col: value_col.replace("_", " ").title()
-            },
-            title=f"Trend of {value_col.replace('_',' ').title()}"
-        )
-        st.plotly_chart(fig_line, use_container_width=True)
+        status_col = None
+        for col in final.columns:
+            if "status" in col or "recovered" in col or "disease" in col:
+                status_col = col
+                break
 
-        st.write(
-            f"This line chart shows how {value_col.replace('_',' ')} changes across {category_col.replace('_',' ')}, revealing patterns or trends."
-        )
+        if status_col:
+            status_counts = final[status_col].value_counts().reset_index()
+            status_counts.columns = ["Status", "Count"]
 
-        # ---------------- PIE CHART ----------------
-        pie_counts = final[category_col].value_counts().reset_index()
-        pie_counts.columns = ["Category", "Count"]
+            fig = px.pie(status_counts,
+                         values="Count",
+                         names="Status",
+                         title="Patient Status Distribution")
 
-        fig_pie = px.pie(
-            pie_counts,
-            values="Count",
-            names="Category",
-            title=f"Distribution of {category_col.replace('_',' ').title()}"
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
 
-        st.write(
-            f"This pie chart illustrates the percentage distribution of different {category_col.replace('_',' ')} categories."
-        )
+            st.write("This pie chart shows the distribution of patients based on recovery status such as recovered, diseased, or deceased.")
 
-    else:
-        st.warning("Dataset needs at least one numeric and one categorical column for visualization.")
+        else:
+            st.warning("No patient status column found.")
 
-else:
-    st.info("Upload at least 2 related datasets to begin analysis.")
+    # ---------------- E-COMMERCE ----------------
+    elif domain == "E-Commerce & Retail":
+
+        if "category" in final.columns:
+            category_counts = final["category"].value_counts().reset_index()
+            category_counts.columns = ["Category", "Sales Count"]
+
+            fig = px.pie(category_counts,
+                         values="Sales Count",
+                         names="Category",
+                         title="Product Category Sales Distribution")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart represents the sales distribution across product categories.")
+
+        else:
+            st.warning("No category column found.")
+
+    # ---------------- BANKING ----------------
+    elif domain == "Banking & Finance":
+
+        if "type" in final.columns:
+            type_counts = final["type"].value_counts().reset_index()
+            type_counts.columns = ["Transaction Type", "Count"]
+
+            fig = px.pie(type_counts,
+                         values="Count",
+                         names="Transaction Type",
+                         title="Transaction Type Distribution")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart shows the percentage of different transaction types such as deposits and withdrawals.")
+
+        else:
+            st.warning("No transaction type column found.")
+
+    # ---------------- HR ----------------
+    elif domain == "HR Management":
+
+        if "department" in final.columns:
+            dept_counts = final["department"].value_counts().reset_index()
+            dept_counts.columns = ["Department", "Employees"]
+
+            fig = px.pie(dept_counts,
+                         values="Employees",
+                         names="Department",
+                         title="Employee Distribution by Department")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart shows how employees are distributed across different departments.")
+
+        else:
+            st.warning("No department column found.")
+
+    # ---------------- SUPPLY CHAIN ----------------
+    elif domain == "Supply Chain":
+
+        if "status" in final.columns:
+            status_counts = final["status"].value_counts().reset_index()
+            status_counts.columns = ["Shipment Status", "Count"]
+
+            fig = px.pie(status_counts,
+                         values="Count",
+                         names="Shipment Status",
+                         title="Shipment Status Distribution")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart displays the proportion of shipments that are delivered, pending, or delayed.")
+
+        else:
+            st.warning("No shipment status column found.")
+
+    # ---------------- TELECOM ----------------
+    elif domain == "Telecommunications":
+
+        if "plan" in final.columns:
+            plan_counts = final["plan"].value_counts().reset_index()
+            plan_counts.columns = ["Plan Type", "Subscribers"]
+
+            fig = px.pie(plan_counts,
+                         values="Subscribers",
+                         names="Plan Type",
+                         title="Subscriber Plan Distribution")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart shows how subscribers are distributed across different telecom plans.")
+
+        else:
+            st.warning("No plan column found.")
+
+    # ---------------- REAL ESTATE ----------------
+    elif domain == "Real Estate":
+
+        if "type" in final.columns:
+            type_counts = final["type"].value_counts().reset_index()
+            type_counts.columns = ["Property Type", "Count"]
+
+            fig = px.pie(type_counts,
+                         values="Count",
+                         names="Property Type",
+                         title="Property Type Distribution")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart shows the percentage of different property types available.")
+
+        else:
+            st.warning("No property type column found.")
+
+    # ---------------- SOCIAL MEDIA ----------------
+    elif domain == "Social Media Analytics":
+
+        if "platform" in final.columns:
+            platform_counts = final["platform"].value_counts().reset_index()
+            platform_counts.columns = ["Platform", "Posts"]
+
+            fig = px.pie(platform_counts,
+                         values="Posts",
+                         names="Platform",
+                         title="Post Distribution by Platform")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart represents how posts are distributed across different social media platforms.")
+
+        else:
+            st.warning("No platform column found.")
+
+    # ---------------- MANUFACTURING ----------------
+    elif domain == "Manufacturing":
+
+        if "machine" in final.columns:
+            machine_counts = final["machine"].value_counts().reset_index()
+            machine_counts.columns = ["Machine", "Production Count"]
+
+            fig = px.pie(machine_counts,
+                         values="Production Count",
+                         names="Machine",
+                         title="Production Distribution by Machine")
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.write("This pie chart shows how production output is distributed across different machines.")
+
+        else:
+            st.warning("No machine column found.")
