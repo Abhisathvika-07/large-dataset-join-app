@@ -1,20 +1,41 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+from sklearn.preprocessing import MinMaxScaler
+import io
 
-st.set_page_config(page_title="Domain Analytics Dashboard", layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Multi-Dataset Fusion Dashboard", layout="wide")
 
-st.title("📊 Domain-Based Analytics Dashboard")
+# ---------------- DARK THEME ----------------
+st.markdown("""
+<style>
+.stApp { background-color: #0f1c2e; }
+section[data-testid="stSidebar"] { background-color: #0b1625; }
+h1, h2, h3, h4, label { color: white !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- SESSION ----------------
+if "final_df" not in st.session_state:
+    st.session_state.final_df = None
 
 # =========================
-# DOMAIN KEYWORDS (STRICT VALIDATION)
+# DOMAIN DEFINITIONS (STRICT VALIDATION)
 # =========================
 domain_keywords = {
     "Education Analytics": ["student", "mark", "score", "grade"],
     "Healthcare Management": ["patient", "hospital", "disease", "status"],
-    "E-Commerce & Retail": ["product", "category", "sales", "price"],
-    "Banking & Finance": ["account", "transaction", "amount", "balance"]
+    "E-Commerce & Retail": ["product", "category", "price", "sales"],
+    "Banking & Finance": ["account", "transaction", "amount", "balance"],
+    "HR Management": ["employee", "salary", "department", "role"],
+    "Supply Chain": ["shipment", "supplier", "inventory", "status"],
+    "Telecommunications": ["subscriber", "call", "plan", "usage"],
+    "Real Estate": ["property", "rent", "buyer", "price"],
+    "Social Media Analytics": ["user", "post", "engagement", "likes"],
+    "Manufacturing": ["machine", "production", "factory", "output"]
 }
+
+st.title("📊 Multi-Dataset Fusion Dashboard")
 
 domain = st.selectbox("📂 Select Business Domain", list(domain_keywords.keys()))
 
@@ -22,17 +43,22 @@ domain = st.selectbox("📂 Select Business Domain", list(domain_keywords.keys()
 # FILE UPLOAD
 # =========================
 uploaded_files = st.sidebar.file_uploader(
-    "Upload related datasets",
-    type=["csv"],
+    "Upload at least 2 related datasets",
+    type=["csv", "xlsx", "json"],
     accept_multiple_files=True
 )
 
 @st.cache_data
 def load_file(file):
-    return pd.read_csv(file)
+    if file.name.endswith(".csv"):
+        return pd.read_csv(file)
+    elif file.name.endswith(".xlsx"):
+        return pd.read_excel(file)
+    elif file.name.endswith(".json"):
+        return pd.read_json(file)
 
 # =========================
-# MERGE + VALIDATION
+# MERGE + DOMAIN VALIDATION
 # =========================
 if uploaded_files and len(uploaded_files) >= 2:
 
@@ -46,17 +72,17 @@ if uploaded_files and len(uploaded_files) >= 2:
 
     expected_keywords = domain_keywords[domain]
 
-    match_count = sum(
-        1 for keyword in expected_keywords
-        for col in all_columns
-        if keyword in col
-    )
+    match_count = 0
+    for keyword in expected_keywords:
+        for col in all_columns:
+            if keyword in col:
+                match_count += 1
 
     if match_count < 2:
-        st.error(f"❌ Uploaded dataset does NOT match selected domain: {domain}")
+        st.error(f"❌ Uploaded dataset does NOT match the selected domain: {domain}")
         st.stop()
 
-    # ---- FIND COMMON COLUMN ----
+    # ---- FIND COMMON COLUMNS ----
     common_cols = set(df_list[0].columns)
     for df in df_list[1:]:
         common_cols &= set(df.columns)
@@ -66,129 +92,63 @@ if uploaded_files and len(uploaded_files) >= 2:
         st.stop()
 
     join_column = st.selectbox("Select Join Column", list(common_cols))
+    join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
     if st.button("Merge Datasets"):
 
         final = df_list[0]
         for df in df_list[1:]:
-            final = final.merge(df, on=join_column, how="inner")
+            final = final.merge(df, on=join_column, how=join_type)
 
         st.session_state.final_df = final
         st.success("Datasets merged successfully!")
 
 # =========================
-# DOMAIN VISUALIZATION
+# AFTER MERGE
 # =========================
-if "final_df" in st.session_state:
+if st.session_state.final_df is not None:
 
     final = st.session_state.final_df
-    final.columns = final.columns.str.lower()
 
-    st.subheader("📊 Domain Insight")
+    st.subheader("🧹 Data Cleaning")
 
-    def find_column(keywords):
-        for col in final.columns:
-            for key in keywords:
-                if key in col:
-                    return col
-        return None
+    if st.checkbox("Remove Duplicates"):
+        final = final.drop_duplicates()
 
-    # ==========================================================
-    # BANKING
-    # ==========================================================
-    if domain == "Banking & Finance":
+    if st.checkbox("Drop Null Rows"):
+        final = final.dropna()
 
-        amount_col = find_column(["amount", "balance"])
-        type_col = find_column(["type", "transaction"])
+    if st.checkbox("Normalize Numeric Columns"):
+        scaler = MinMaxScaler()
+        num_cols = final.select_dtypes(include=["number"]).columns
+        final[num_cols] = scaler.fit_transform(final[num_cols])
 
-        if amount_col and type_col:
-            summary = final.groupby(type_col)[amount_col].sum().reset_index()
+    # KPI SECTION
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Rows", final.shape[0])
+    col2.metric("Columns", final.shape[1])
+    col3.metric("Missing Values", final.isnull().sum().sum())
 
-            fig = px.pie(summary,
-                         names=type_col,
-                         values=amount_col,
-                         title="Transaction Amount Distribution by Type")
+    st.subheader("📑 Data Preview")
+    st.dataframe(final.head())
 
-            st.plotly_chart(fig, use_container_width=True)
+    # EXPORT
+    st.subheader("⬇ Export Data")
 
-            st.info(
-                "This chart shows how total money is distributed across different transaction types "
-                "such as deposits, withdrawals, or transfers. Larger segments indicate higher financial activity."
-            )
+    st.download_button(
+        "Download CSV",
+        final.to_csv(index=False),
+        "final_dataset.csv"
+    )
 
-    # ==========================================================
-    # E-COMMERCE
-    # ==========================================================
-    elif domain == "E-Commerce & Retail":
+    buffer = io.BytesIO()
+    final.to_excel(buffer, index=False)
 
-        revenue_col = find_column(["sales", "price", "amount"])
-        category_col = find_column(["category", "product"])
-
-        if revenue_col and category_col:
-            summary = final.groupby(category_col)[revenue_col].sum().reset_index()
-
-            fig = px.pie(summary,
-                         names=category_col,
-                         values=revenue_col,
-                         title="Revenue Contribution by Product Category")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.info(
-                "This pie chart shows which product categories generate the most revenue. "
-                "Bigger slices represent higher total sales."
-            )
-
-    # ==========================================================
-    # EDUCATION
-    # ==========================================================
-    elif domain == "Education Analytics":
-
-        grade_col = find_column(["grade", "result"])
-        score_col = find_column(["mark", "score"])
-
-        if grade_col:
-            summary = final[grade_col].value_counts().reset_index()
-            summary.columns = ["Grade", "Count"]
-
-            fig = px.pie(summary,
-                         names="Grade",
-                         values="Count",
-                         title="Student Grade Distribution")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.info(
-                "This pie chart represents the distribution of students across different grades, "
-                "helping evaluate overall academic performance."
-            )
-
-        elif score_col:
-            avg_score = final[score_col].mean()
-            st.metric("Average Score", round(avg_score, 2))
-
-    # ==========================================================
-    # HEALTHCARE
-    # ==========================================================
-    elif domain == "Healthcare Management":
-
-        status_col = find_column(["status", "outcome", "recovered", "disease"])
-
-        if status_col:
-            summary = final[status_col].value_counts().reset_index()
-            summary.columns = ["Health Status", "Count"]
-
-            fig = px.pie(summary,
-                         names="Health Status",
-                         values="Count",
-                         title="Patient Health Status Distribution")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.info(
-                "This chart shows the proportion of patients who are recovered, under treatment, "
-                "or deceased. It provides insight into overall healthcare outcomes."
-            )
+    st.download_button(
+        "Download Excel",
+        buffer.getvalue(),
+        "final_dataset.xlsx"
+    )
 
 else:
     st.info("Upload at least 2 related datasets to begin.")
