@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import io
 
@@ -21,24 +20,24 @@ if "final_df" not in st.session_state:
     st.session_state.final_df = None
 
 # =========================
-# DOMAIN LIST
+# DOMAIN DEFINITIONS (STRICT VALIDATION)
 # =========================
-domains = [
-    "Education Analytics",
-    "Healthcare Management",
-    "E-Commerce & Retail",
-    "Banking & Finance",
-    "HR Management",
-    "Supply Chain",
-    "Telecommunications",
-    "Real Estate",
-    "Social Media Analytics",
-    "Manufacturing"
-]
+domain_keywords = {
+    "Education Analytics": ["student", "mark", "score", "grade"],
+    "Healthcare Management": ["patient", "hospital", "disease", "status"],
+    "E-Commerce & Retail": ["product", "category", "price", "sales"],
+    "Banking & Finance": ["account", "transaction", "amount", "balance"],
+    "HR Management": ["employee", "salary", "department", "role"],
+    "Supply Chain": ["shipment", "supplier", "inventory", "status"],
+    "Telecommunications": ["subscriber", "call", "plan", "usage"],
+    "Real Estate": ["property", "rent", "buyer", "price"],
+    "Social Media Analytics": ["user", "post", "engagement", "likes"],
+    "Manufacturing": ["machine", "production", "factory", "output"]
+}
 
 st.title("📊 Multi-Dataset Fusion Dashboard")
 
-domain = st.selectbox("📂 Select Business Domain", domains)
+domain = st.selectbox("📂 Select Business Domain", list(domain_keywords.keys()))
 
 # =========================
 # FILE UPLOAD
@@ -59,30 +58,50 @@ def load_file(file):
         return pd.read_json(file)
 
 # =========================
-# MERGE
+# MERGE + DOMAIN VALIDATION
 # =========================
 if uploaded_files and len(uploaded_files) >= 2:
 
     df_list = [load_file(f) for f in uploaded_files]
     df_list = [df.rename(columns=lambda x: x.strip().lower()) for df in df_list]
 
+    # ---- STRICT DOMAIN VALIDATION ----
+    all_columns = []
+    for df in df_list:
+        all_columns.extend(df.columns.tolist())
+
+    expected_keywords = domain_keywords[domain]
+
+    match_count = 0
+    for keyword in expected_keywords:
+        for col in all_columns:
+            if keyword in col:
+                match_count += 1
+
+    if match_count < 2:
+        st.error(f"❌ Uploaded dataset does NOT match the selected domain: {domain}")
+        st.stop()
+
+    # ---- FIND COMMON COLUMNS ----
     common_cols = set(df_list[0].columns)
     for df in df_list[1:]:
         common_cols &= set(df.columns)
 
-    if common_cols:
-        join_column = st.selectbox("Select Join Column", list(common_cols))
-        join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
+    if not common_cols:
+        st.error("❌ No common columns found to merge.")
+        st.stop()
 
-        if st.button("Merge Datasets"):
-            final = df_list[0]
-            for df in df_list[1:]:
-                final = final.merge(df, on=join_column, how=join_type)
+    join_column = st.selectbox("Select Join Column", list(common_cols))
+    join_type = st.selectbox("Join Type", ["inner", "left", "right", "outer"])
 
-            st.session_state.final_df = final
-            st.success("Datasets merged successfully!")
-    else:
-        st.error("No common columns found.")
+    if st.button("Merge Datasets"):
+
+        final = df_list[0]
+        for df in df_list[1:]:
+            final = final.merge(df, on=join_column, how=join_type)
+
+        st.session_state.final_df = final
+        st.success("Datasets merged successfully!")
 
 # =========================
 # AFTER MERGE
@@ -90,7 +109,6 @@ if uploaded_files and len(uploaded_files) >= 2:
 if st.session_state.final_df is not None:
 
     final = st.session_state.final_df
-    final.columns = final.columns.str.lower()
 
     st.subheader("🧹 Data Cleaning")
 
@@ -105,28 +123,16 @@ if st.session_state.final_df is not None:
         num_cols = final.select_dtypes(include=["number"]).columns
         final[num_cols] = scaler.fit_transform(final[num_cols])
 
-    # =========================
     # KPI SECTION
-    # =========================
     col1, col2, col3 = st.columns(3)
     col1.metric("Rows", final.shape[0])
     col2.metric("Columns", final.shape[1])
     col3.metric("Missing Values", final.isnull().sum().sum())
 
-    # =========================
-    # DATA SUMMARY (Instead of Visuals)
-    # =========================
-    st.subheader("📑 Dataset Summary")
-
-    st.write("### Numerical Summary")
-    st.dataframe(final.describe())
-
-    st.write("### Preview of Data")
+    st.subheader("📑 Data Preview")
     st.dataframe(final.head())
 
-    # =========================
     # EXPORT
-    # =========================
     st.subheader("⬇ Export Data")
 
     st.download_button(
