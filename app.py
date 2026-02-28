@@ -227,24 +227,36 @@ if st.session_state.final_df is not None:
     col2.metric("Columns", final.shape[1])
     col3.metric("Missing Values", final.isnull().sum().sum())
 
+    
     # -------- VISUALIZATION --------
-    st.subheader("📈 Visual Analytics")
+# -------- VISUALIZATION --------
+st.subheader("📊 Visual Analytics")
 
-    numeric_cols = final.select_dtypes(include=np.number).columns
+numeric_cols = final.select_dtypes(include=np.number).columns
 
-    if len(numeric_cols) > 0:
-        selected = st.selectbox("Select Numeric Column", numeric_cols)
+if len(numeric_cols) > 0:
 
-        fig_bar = px.bar(final[selected].value_counts().head(10))
-        st.plotly_chart(fig_bar, use_container_width=True)
+    selected = st.selectbox("Select Numeric Column", numeric_cols)
 
-        fig_line = px.line(final[selected])
-        st.plotly_chart(fig_line, use_container_width=True)
+    # -------- LINE CHART --------
+    fig_line = px.line(
+        final,
+        y=selected,
+        title=f"{selected} Trend Over Records",
+        markers=True
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
 
-        corr = final[numeric_cols].corr()
-        fig_heat = px.imshow(corr, text_auto=True)
-        st.plotly_chart(fig_heat, use_container_width=True)
+    # -------- PIE CHART (Top 5 Values) --------
+    top_data = final.sort_values(by=selected, ascending=False).head(5)
 
+    fig_pie = px.pie(
+        top_data,
+        values=selected,
+        names=top_data.index,
+        title=f"Top 5 Distribution of {selected}"
+    )
+    st.plotly_chart(fig_pie, use_container_width=True)
     # -------- ML --------
     st.subheader("🤖 Machine Learning")
 
@@ -278,3 +290,4 @@ if st.session_state.final_df is not None:
 
 else:
     st.info("Upload at least 2 related files to begin analysis.")
+
