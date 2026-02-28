@@ -145,14 +145,27 @@ if uploaded_files and len(uploaded_files) >= 2:
     df_list = [df.rename(columns=lambda x: x.strip().lower()) for df in df_list]
 
     # -------- DOMAIN VALIDATION --------
-   # -------- DOMAIN VALIDATION --------
+  # -------- STRICT DOMAIN VALIDATION --------
 expected_keywords = domains[domain]
-all_columns = " ".join(df_list[0].columns)
 
-if not any(keyword in all_columns for keyword in expected_keywords):
-    st.error(f"❌ Uploaded datasets do not match selected domain: {domain}")
+# Combine all column names from all uploaded files
+all_columns = []
+for df in df_list:
+    all_columns.extend(list(df.columns))
+
+all_columns = [col.lower() for col in all_columns]
+
+# Count matching keywords
+match_count = 0
+for keyword in expected_keywords:
+    for col in all_columns:
+        if keyword in col:
+            match_count += 1
+
+# Require at least 2 strong matches to allow merge
+if match_count < 2:
+    st.error(f"❌ Selected domain '{domain}' does not match uploaded dataset structure.")
     st.stop()
-
     # -------- AUTO DETECT COMMON COLUMNS --------
     common_cols = set(df_list[0].columns)
     for df in df_list[1:]:
@@ -268,4 +281,5 @@ if "final_df" in st.session_state:
 
 else:
     st.info("Upload at least 2 files and merge to begin analysis.")
+
 
